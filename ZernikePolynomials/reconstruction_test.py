@@ -33,14 +33,14 @@ else:
 # %% Testing the another calibration mechanism - calculate only once the integral matrix for the non-aberrated image
 if repo_pics:
     # Parameters for integration
-    plot = True; aperture_radius = 14.0; threshold = 58.0; region_size = 16; n_integration_steps = 80; min_dist_peaks = 18
+    plot = False; aperture_radius = 14.0; threshold = 58.0; region_size = 18; n_integration_steps = 80; min_dist_peaks = 18
     # Manual specification of relative paths to the files
     current_path = os.path.dirname(__file__)  # get path to the folder containing the script
     calibrations = os.path.join(current_path, "calibrations")  # the "calibrations" folder with all saved calculations data
     precalculated_zernikes = os.path.join(calibrations, "IntegralMatrix20TabularZernike_RepoPics.npy")
-    # precalculated_zernikes2 = os.path.join(calibrations, "integral_calibration_matrix.npy")
+    # precalculated_zernikes2 = os.path.join(calibrations, "integral_calibration_matrix.npy")  # from UI calculations
     precalculated_nonaberration = os.path.join(calibrations, "CoMsNonaberrated_RepoPics.npy")
-    # precalculated_nonaberration2 = os.path.join(calibrations, "detected_focal_spots.npy")
+    # precalculated_nonaberration2 = os.path.join(calibrations, "detected_focal_spots.npy")  # from UI calculations
     if not(os.path.exists(precalculated_zernikes)):
         t1 = time.time()  # get the current time measurement
         (coms_nonaberrated, pic_integral_limits,

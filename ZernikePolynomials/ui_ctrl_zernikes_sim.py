@@ -272,17 +272,23 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # below - get the path to the influence matrix
         influence_matrix_file_path = tk.filedialog.askopenfilename(filetypes=[("Matlab file", "*.mat"),
                                                                               ("Pickled file", "*.pkl")])
-        # print(influence_matrix_file_path[len(influence_matrix_file_path)-3:])
-        if influence_matrix_file_path[len(influence_matrix_file_path)-3:] == 'mat':
-            self.influence_matrix = gv.load_InfMat_matlab(influence_matrix_file_path)
-        elif influence_matrix_file_path[len(influence_matrix_file_path)-3:] == 'pkl':
-            self.influence_matrix = gv.load_InfMat(influence_matrix_file_path)
-        rows, cols = self.influence_matrix.shape
-        # Influence matrix successfully loaded => activate the possibility to calculate voltages
-        if (rows > 0) and (cols > 0):
-            self.getVoltsButton.state(['!disabled'])
-        else:
-            self.getVoltsButton.state(['disabled'])
+        if influence_matrix_file_path is not None:
+            file_opened = False  # preventing mistakes if dialog window is cancelled
+            if influence_matrix_file_path[len(influence_matrix_file_path)-3:] == 'mat':
+                self.influence_matrix = gv.load_InfMat_matlab(influence_matrix_file_path)
+                if isinstance(self.influence_matrix, np.ndarray):
+                    file_opened = True
+            elif influence_matrix_file_path[len(influence_matrix_file_path)-3:] == 'pkl':
+                self.influence_matrix = gv.load_InfMat(influence_matrix_file_path)
+                if isinstance(self.influence_matrix, np.ndarray):
+                    file_opened = True
+            if file_opened:
+                rows, cols = self.influence_matrix.shape
+                # Influence matrix successfully loaded => activate the possibility to calculate voltages
+                if (rows > 0) and (cols > 0):
+                    self.getVoltsButton.state(['!disabled'])
+                else:
+                    self.getVoltsButton.state(['disabled'])
 
     def getVolts(self):
         """
@@ -324,7 +330,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     self.diff_amplitudes[m] = np.round((self.check_solution[k, 0] - ampl), 2); m += 1
             k += 1
         self.openSerialCommButton.state(['!disabled'])
-        # TODO - send the voltages using AmpCom to the device
+        # TODO - send the voltages using the AmpCom library to a device
 
     def maxV_changed(self, *args):
         """
@@ -460,7 +466,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        if self.deviceHandle is not None:
+        if self.deviceHandle is not None:  # send to the device close command
             try:
                 ampcom.AmpCom.AmpZero(self.deviceHandle)
             except Exception:

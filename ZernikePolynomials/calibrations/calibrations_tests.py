@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Concatenate different calculated integral matricies.
+Concatenate different calculated integral matricies and saving them (uncomment the line) into single file.
 
 @author: ssklykov
 """

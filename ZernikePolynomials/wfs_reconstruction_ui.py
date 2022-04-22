@@ -608,6 +608,19 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                     self.reconstruct_get_zernikes_button = tk.Button(master=self.reconstruction_window, text="Get Aberrations",
                                                                      command=self.calculate_zernikes_coefficients)
                     self.reconstruct_get_zernikes_button.config(state="disabled")
+                    self.reconstruct_save_zernikes_plot = tk.Button(master=self.reconstruction_window, text="Save sum plot",
+                                                                    command=self.save_sum_reconstructed_zernikes)
+                    self.reconstruct_save_zernikes_plot.config(state="disabled")
+
+                    # Selector to show / hide a colorbar for polynomials plot
+                    self.colorbar_show_options = ["No colorbar", "Show colorbar"]
+                    self.colorbar_show_var = tk.StringVar()
+                    self.colorbar_show_var.set(self.colorbar_show_options[0])
+                    self.amplitude_show_selector = tk.OptionMenu(self.reconstruction_window,
+                                                                 self.colorbar_show_var,
+                                                                 *self.colorbar_show_options,
+                                                                 command=self.colobar_option_selected)
+                    self.amplitude_show_selector.config(state="disabled")
 
                     # Construction of figure holder for its representation
                     self.reconstruction_figure = plot_figure.Figure(figsize=(6.8, 5.7))
@@ -643,6 +656,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                     self.reconstruct_get_shifts_button.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
                     self.reconstruct_get_zernikes_button.grid(row=0, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
                     self.reconstruction_fig_widget.grid(row=1, rowspan=4, column=0, columnspan=5, padx=pad, pady=pad)
+                    self.amplitude_show_selector.grid(row=5, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+                    self.reconstruct_save_zernikes_plot.grid(row=5, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
 
                     # Draw the loaded image
                     if self.reconstruction_axes is None:
@@ -711,6 +726,12 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.reconstruction_axes.plot(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0], '.', color="red")
             self.reconstruction_canvas.draw()  # redraw image in the widget (stored in canvas)
             self.reconstruct_get_shifts_button.config(state="normal")
+        # Disable some buttons for preventing of usage of previous calculation results
+        if self.amplitude_show_selector['state'] == 'normal':
+            self.amplitude_show_selector.config(state='disabled')
+        if self.reconstruct_get_zernikes_button['state'] == 'normal':
+            self.reconstruct_get_zernikes_button.config(state='disabled')
+            self.reconstruct_save_zernikes_plot.config(state='disabled')
 
     def calculate_coms_shifts(self):
         """
@@ -736,6 +757,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                                color='red', linewidth=4)
             self.reconstruction_canvas.draw()  # redraw image in the widget (stored in canvas)
             self.reconstruct_get_zernikes_button.config(state="normal")
+        # Disable some buttons for preventing of usage of previous calculation results
+        if self.amplitude_show_selector['state'] == 'normal':
+            self.amplitude_show_selector.config(state='disabled')
 
     def calculate_zernikes_coefficients(self):
         """
@@ -758,6 +782,54 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                                             step_r=0.005, step_theta=0.9,
                                                             alpha_coefficients=self.alpha_coefficients, show_amplitudes=False)
             self.reconstruction_canvas.draw()  # redraw the figure
+            self.amplitude_show_selector.config(state="normal")
+            self.reconstruct_save_zernikes_plot.config(state="normal")
+
+    def colobar_option_selected(self, *args):
+        """
+        Draw or remove the colorbar on the profile with Zernike polynomials sum for representation of their amplitudes.
+
+        Parameters
+        ----------
+        *args : list
+            Provided by tkinter upon the changing tkinter.OptionMenu.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.colorbar_show_var.get() == "No colorbar":
+            show_amplitudes = False
+        else:
+            show_amplitudes = True
+        if len(self.alpha_coefficients) > 0:
+            # Draw the profile with Zernike polynomials multiplied by coefficients (amplitudes)
+            self.reconstruction_figure = get_plot_zps_polar(self.reconstruction_figure, orders=self.zernike_list_orders,
+                                                            step_r=0.005, step_theta=0.9,
+                                                            alpha_coefficients=self.alpha_coefficients,
+                                                            show_amplitudes=show_amplitudes)
+            self.reconstruction_canvas.draw()  # redraw the figure
+
+    def save_sum_reconstructed_zernikes(self):
+        """
+        Save plotted reconstructed sum of Zernike polynomials.
+
+        Returns
+        -------
+        None.
+
+        """
+        file_types = [("PNG image", "*.png"), ("JPG file", "*.jpg")]
+        if self.reconstruction_canvas is not None and self.reconstruction_figure is not None:
+            sum_plot_file = tk.filedialog.asksaveasfile(title="Save integral matrix",
+                                                        initialdir=self.calibration_path,
+                                                        filetypes=file_types,
+                                                        defaultextension=".png",
+                                                        initialfile="Reconstructed sum of polynomials")
+            if sum_plot_file is not None:
+                self.sum_plot_file_path = sum_plot_file.name  # get the string path
+                self.reconstruction_figure.savefig(self.sum_plot_file_path)  # save the drawn figure on the GUI
 
     def reconstruction_exit(self):
         """
