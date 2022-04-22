@@ -2,7 +2,7 @@
 """
 GUI for perform wavefront reconstruction.
 
-It's can be used for test of implemented algorithm (refernces in the corresponding scripts) of
+It's can be used for test of implemented algorithm (see description in called functions) on
 many recorded images, stored locally.
 @author: ssklykov
 """
