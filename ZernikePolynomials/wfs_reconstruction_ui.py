@@ -43,7 +43,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.default_threshold = 55; self.default_radius = 14.0; self.coms_spots = None
         self.order = 4  # default selected Zernike order
         self.messages_queue = Queue(maxsize=10)
-        self.integral_matrix = []
+        self.integral_matrix = np.ndarray
         self.calculation_thread = None  # holder for calculation thread of integral matrix
         self.integration_running = False  # flag for tracing the running integration
         self.activate_load_aber_pic_count = 0  # if it is equal to 2, then both files for reconstruction can be loaded

@@ -38,7 +38,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.deviceHandle = None  # holder for the opened serial communication handle
         self.serial_comm_ctrl = None  # empty holder for serial communication ctrl
         self.voltages_bits = None  # empty holder because of asking in the end of the script to return this value
-        self.librariesImported = False  # libraries for import - PySeriral and local device controlling library
+        self.librariesImported = False  # libraries for import - PySerial and local device controlling library
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
         self.diff_amplitudes = np.empty(1); self.influence_matrix = np.empty(1)
