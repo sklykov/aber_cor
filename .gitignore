@@ -4,8 +4,9 @@ documentation/
 Docs/
 SimUscope/*.tiff
 
-# Driver library for the device (below) - not public yet
+# Driver libraries for the device (below) - not public yet
 ZernikePolynomials/ampcom/*
+ZernikePolynomials/ampcom_pt/*
 
 # Specifics from PyCharm
 .idea/

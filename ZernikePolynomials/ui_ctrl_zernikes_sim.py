@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # import canvas container from matplotlib for tkinter
 from zernike_pol_calc import get_plot_zps_polar, get_classical_polynomial_name, get_osa_standard_index
 import matplotlib.figure as plot_figure
-# import time
+import time
 import numpy as np
 
 
@@ -39,6 +39,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.serial_comm_ctrl = None  # empty holder for serial communication ctrl
         self.voltages_bits = None  # empty holder because of asking in the end of the script to return this value
         self.librariesImported = False  # libraries for import - PySerial and local device controlling library
+        self.baudrate = 115200  # default
+        self.ampcomImported = False
+        self.converted_voltages = []
+
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
         self.diff_amplitudes = np.empty(1); self.influence_matrix = np.empty(1)
@@ -47,6 +51,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.zernikesLabel = Label(self, text=" Zernike polynoms ctrls up to:")
         self.figure = plot_figure.Figure(figsize=(5, 5))  # Default empty figure for phase profile
         self.canvas = FigureCanvasTkAgg(self.figure, master=self); self.plotWidget = self.canvas.get_tk_widget()
+
         # !!! Below - the way of how associate tkinter buttons with the variables and their states! THEY ARE DECOUPLED!
         self.varPlotColorbarButton = tk.BooleanVar(); self.varPlotColorbarButton.set(False)
         self.plotColorbarButton = Checkbutton(self, text="Colorbar", command=self.colorBarPlotting,
@@ -57,12 +62,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.flattenButton = Button(self, text="Flatten all", command=self.flattenAll)
         self.getVoltsButton = Button(self, text="Get Volts", command=self.getVolts)
         self.getVoltsButton.state(['disabled'])
+
         # Below - specification of OptionMenu from ttk for polynomials order selection, fixed thanks to StackOverflow
         self.order_n = ["1st ", "2nd ", "3rd ", "4th ", "5th ", "6th ", "7th "]
         self.order_list = [item + "order" for item in self.order_n]
         self.clickable_list = tk.StringVar(); self.clickable_list.set(self.order_list[0])
         self.max_order_selector = OptionMenu(self, self.clickable_list, self.order_list[0], *self.order_list,
                                              command=self.numberOrdersChanged)
+
         # Specification of two case selectors: Simulation / Controlling DPP
         self.listDevices = ["Pure Simulator", "DPP + Simulator"]; self.device_selector = tk.StringVar()
         self.device_selector.set(self.listDevices[0])
@@ -70,6 +77,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                                                self.listDevices[0],
                                                *self.listDevices,
                                                command=self.deviceSelected)
+
         # Max voltage control with the named label and Combobox for controlling voltage
         self.holderSelector = Frame(self); textVMaxLabel = Label(self.holderSelector, text=" Max Volts:")
         self.maxV_selector_value = tk.IntVar(); self.maxV_selector_value.set(200)  # initial voltage
@@ -79,6 +87,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                                      increment=10, state=tk.DISABLED, width=5,
                                      exportselection=True, textvariable=self.maxV_selector_value)
         textVMaxLabel.pack(side=tk.LEFT); self.maxV_selector.pack(side=tk.LEFT)
+
         # Below - additional window for holding the sliders with the amplitudes
         self.ampl_ctrls = tk.Toplevel(master=self)  # additional window, master - the main window
         # put this additional window with some offset for the representing it next to the main
@@ -86,6 +95,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Seems, that command below makes accessible the button values from this window to the main
         self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.title("Amplitude controls")
         self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)  # !!! Associate clicking on quit button (X) with the function
+
         # Placing all created widgets in the grid layout on the main window
         self.zernikesLabel.grid(row=0, rowspan=1, column=0, columnspan=1)
         self.max_order_selector.grid(row=0, rowspan=1, column=1, columnspan=1)
@@ -242,17 +252,32 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         if new_device == "DPP + Simulator":
-            try:
-                import getvolt as gv  # import developed in-house library available for the other parts of program
-                global gv  # make the name global for accessibility
+            # If the user wants to control a device, then try to import all needed libraries (2 of 3, 1 - later)
+            if not self.librariesImported:
+                try:
+                    import serial; global serial  # Serial library (pyserial) for general communication with a device
+                    import serial.tools.list_ports as list_ports; global list_ports
+                    print("Serial library imported")
+                except ValueError:
+                    print("Serial library https://pyserial.readthedocs.io/en/latest/index.html is not installed")
+                # Below - attempt to import library for voltages calculation (in-house developed)
+                try:
+                    import getvolt as gv  # import developed in-house library available for the other parts of program
+                    global gv  # make the name global for accessibility
+                    print("Get volts module imported")
+                    self.loadInflMatrixButton.state(['!disabled'])  # activate the influence matrix
+                    self.maxV_selector.state(['!disabled'])
+                    self.openSerialCommunication()  # creates additional controlling window above the main one
+                except ImportError:
+                    print("The in-house developed controlling library not installed on this computer.\n"
+                          "Get it for maintainers with instructions!")
+                    print("The selection of device will go again to the Pure Simulated")
+                    self.device_selector.set(self.listDevices[0])
+                self.librariesImported = True
+            else:
                 self.loadInflMatrixButton.state(['!disabled'])  # activate the influence matrix
                 self.maxV_selector.state(['!disabled'])
                 self.openSerialCommunication()  # creates additional controlling window above the main one
-            except ImportError:
-                print("The in-house developed controlling library not installed on this computer.\n"
-                      "Get it for maintainers with instructions!")
-                print("The selection of device will go again to the Pure Simulated")
-                self.device_selector.set(self.listDevices[0])
         else:
             self.loadInflMatrixButton.state(['!disabled', 'disabled'])  # disable it again
             self.maxV_selector.state(['disabled'])
@@ -329,7 +354,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 if diff_amplitudes_size > 0:
                     self.diff_amplitudes[m] = np.round((self.check_solution[k, 0] - ampl), 2); m += 1
             k += 1
-        self.openSerialCommButton.state(['!disabled'])
+        self.send_voltages_button.state(['!disabled'])
         # TODO - send the voltages using the AmpCom library to a device
 
     def maxV_changed(self, *args):
@@ -388,12 +413,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if self.deviceHandle is not None:
             try:
                 ampcom.AmpCom.AmpZero(self.deviceHandle)
-            except Exception:
+            except NameError:
                 print("The device not zeroed")
             finally:
                 self.deviceHandle.close()  # close the serial connection anyway
+                if not self.deviceHandle.isOpen():
+                    print("Serial connection closed due to controlling window closed")
                 self.deviceHandle = None
-        print("Serial connection closed due to controlling window closing")
+                self.device_selector.set(self.listDevices[0])
 
     def openSerialCommunication(self):
         """
@@ -405,16 +432,89 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         # All initialization steps are analogue to the specified for amplitudes controls
+        # Add the additional window evoked by the button for communication with the device
         self.serial_comm_ctrl = tk.Toplevel(master=self)  # additional window, master - the main window
         self.serial_comm_ctrl_offsets = "+5+775"; self.serial_comm_ctrl.wm_transient(self)
         self.serial_comm_ctrl.geometry(self.serial_comm_ctrl_offsets)
-        # !!! Below - rewriting of default destroy event for closing the serial connection
+        # !!! Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
         self.serial_comm_ctrl.protocol("WM_DELETE_WINDOW", self.destroySerialCtrlWindow)
-        # Add the additional window evoked by the button for communication with the device
-        self.openSerialCommButton = Button(self.serial_comm_ctrl, text="Send voltages", command=self.send_voltages)
-        self.serialCommLabel = Label(self.serial_comm_ctrl, text="Experimental, sends the calculated voltages: ")
-        self.serialCommLabel.pack(side=tk.LEFT); self.openSerialCommButton.pack(side=tk.LEFT)
-        self.openSerialCommButton.state(['disabled'])  # after opening the window, set to disabled, before voltages
+
+        # Listing of all available COM ports
+        self.ports = []
+        for port in list_ports.comports():  # get all ports stored in attributes of the class
+            self.ports.append(port.name)
+        if len(self.ports) == 0:
+            print("No COM ports detected")
+            self.destroySerialCtrlWindow()
+            print("The selection of device will go again to the Pure Simulated")
+            self.device_selector.set(self.listDevices[0])
+        else:
+            # Creation and placing of controlling buttons because at least 1 COM port available
+            pad = 4  # additional border shifts
+            self.send_voltages_button = Button(self.serial_comm_ctrl, text="Send voltages", command=self.send_voltages)
+            self.clickable_ports = tk.StringVar(); self.clickable_ports.set(self.ports[0])
+            self.port_selector = OptionMenu(self.serial_comm_ctrl, self.clickable_ports, self.ports[0],
+                                            *self.ports, command=self.port_selected)
+            self.connection_status = tk.StringVar(); self.connection_status.set("Not initialized")
+            self.connection_label = Label(self.serial_comm_ctrl, textvariable=self.connection_status, foreground='red')
+            self.get_device_status_button = Button(self.serial_comm_ctrl, text="Get status", command=self.get_device_status)
+            # Placing buttons on the window
+            self.port_selector.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+            self.connection_label.grid(row=0, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
+            self.get_device_status_button.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
+            self.send_voltages_button.grid(row=0, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
+            self.serial_comm_ctrl.grid()
+            self.send_voltages_button.state(['disabled'])  # after opening the window, set to disabled, before voltages
+            self.get_device_status_button.config(state="disabled")
+            self.port_selected()  # try to initialize serial connection on COM port
+
+    def port_selected(self, *args):
+        """
+        Handle of selection of the active COM port AND trying open serial connection on it.
+
+        Parameters
+        ----------
+        *args : list with arguments provided by tkinter call.
+            They describe the function signature call.
+
+        Returns
+        -------
+        None.
+
+        """
+        # print("Selected COM port:", self.clickable_ports.get())
+        self.deviceHandle = None
+        try:
+            self.deviceHandle = serial.Serial(self.clickable_ports.get(), baudrate=self.baudrate,
+                                              timeout=0.1, write_timeout=0.01)
+            time.sleep(2)  # delay needed in any case for establishing serial communication
+            #  However, the delay above isn't proven to be equal to this magic number
+            self.connection_status.set("Initialized"); self.connection_label.config(foreground='green')
+            print("Serial connection initialized with:", self.deviceHandle.port, self.deviceHandle.baudrate)
+            self.get_device_status_button.config(state="normal")
+        except serial.SerialException:
+            print("Could not connect to the device on the specified COM port")
+            self.send_voltages_button.config(state="disabled")
+            self.get_device_status_button.config(state="disabled")
+
+    def get_device_status(self):
+        """
+        Print the result after sending hard-coded command "status" and also pending after initialization input messages.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.deviceHandle.in_waiting > 0:
+            print("*****Pending received messages from device:*****")
+            print(self.deviceHandle.read(self.deviceHandle.in_waiting).decode("utf-8"))
+        # Some hard-coded command upon which the preconfigured device should report the status
+        self.deviceHandle.write(b'?'); time.sleep(0.05)
+        self.report = self.deviceHandle.read(self.deviceHandle.in_waiting).decode("utf-8")
+        if len(self.report) > 0:
+            print("*************Device reports:*************")
+            print(self.report)
 
     def send_voltages(self):
         """
@@ -426,36 +526,18 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         # Trying to import additional dependencies
-        if not self.librariesImported:
+        if not self.ampcomImported:
             try:
-                import serial; global serial
-                print("Serial library imported")
-                import ampcom; global ampcom
+                import ampcom_pt; global ampcom_pt
                 print("Device controlling library imported")
-                self.librariesImported = True
-            except ValueError:
-                print("Serial library https://pyserial.readthedocs.io/en/latest/index.html is not installed")
+                self.ampcomImported = True
             except ModuleNotFoundError:
                 print("Device control communication library are not importable")
-                self.serial_comm_ctrl.destroy()  # close the controlling window
-        if self.librariesImported:
-            VMAX = self.maxV_selector_value.get(); print("Used maximum voltage:", VMAX)
-            self.voltages_bits = ampcom.AmpCom.create_varr2(self.voltages, VMAX)
-            if self.deviceHandle is None:  # open serial communication and send voltages
-                try:
-                    self.deviceHandle = ampcom.AmpCom.AmpConnect()  # connect to the device
-                    ampcom.AmpCom.AmpStatus(self.deviceHandle)  # should print the device status
-                    converted_voltages = ampcom.AmpCom.create_varr2(self.voltages, VMAX)  # made out of found voltages bits
-                    ampcom.AmpCom.AmpWrite(self.deviceHandle, converted_voltages)  # send converted V to bits to a device
-                    ampcom.AmpCom.AmpStatus(self.deviceHandle)  # should print the device status
-                except Exception:
-                    print("Connection hasn't been established, check connection settings")
-            else:  # the connection was established already
-                ampcom.AmpCom.AmpStatus(self.deviceHandle)  # should print the device status - ??? (reimplement it)
-                converted_voltages = ampcom.AmpCom.create_varr2(self.voltages, VMAX)  # made out of found voltages bits
-                ampcom.AmpCom.AmpWrite(self.deviceHandle, converted_voltages)  # send converted V to bits to a device
-                ampcom.AmpCom.AmpUpdate(self.deviceHandle)  # always update after write
-                ampcom.AmpCom.AmpStatus(self.deviceHandle)  # should print the device status
+        # Calculate parameters for sending to a device
+        if self.ampcomImported:
+            VMAX = self.maxV_selector_value.get()
+            if self.deviceHandle is not None:  # open serial communication and send voltages
+                self.converted_voltages = ampcom_pt.AmpCom.create_varr(self.voltages, VMAX)
 
     def destroy(self):
         """
@@ -469,10 +551,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if self.deviceHandle is not None:  # send to the device close command
             try:
                 ampcom.AmpCom.AmpZero(self.deviceHandle)
-            except Exception:
+            except NameError:
                 print("The device not zeroed")
             finally:
                 self.deviceHandle.close()  # close the serial connection anyway
+                if not self.deviceHandle.isOpen():
+                    print("Serial connection closed")
         print("The GUI closed")
 
 
@@ -481,6 +565,7 @@ if __name__ == "__main__":
     root = tk.Tk()  # running instance of Tk()
     ui_ctrls = ZernikeCtrlUI(root)  # construction of the main frame
     ui_ctrls.mainloop()
-    # Below - get the calculated values during the session for testing applied functions
+    # Below - get the calculated values during the session for testing (debugging) applied functions
     check_solution = ui_ctrls.check_solution; zernike_amplitudes = ui_ctrls.zernike_amplitudes
     diff_amplitudes = ui_ctrls.diff_amplitudes; voltages_bits = ui_ctrls.voltages_bits
+    converted_voltages = ui_ctrls.converted_voltages
