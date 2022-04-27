@@ -39,9 +39,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.serial_comm_ctrl = None  # empty holder for serial communication ctrl
         self.voltages_bits = None  # empty holder because of asking in the end of the script to return this value
         self.librariesImported = False  # libraries for import - PySerial and local device controlling library
-        self.baudrate = 115200  # default
-        self.ampcomImported = False
-        self.converted_voltages = []
+        self.baudrate = 115200  # default rate for serial communication
+        self.ampcomImported = False; self.converted_voltages = []; self.volts_written = False
+        self.parse_indicies = []
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
@@ -91,22 +91,23 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Below - additional window for holding the sliders with the amplitudes
         self.ampl_ctrls = tk.Toplevel(master=self)  # additional window, master - the main window
         # put this additional window with some offset for the representing it next to the main
-        self.ampl_ctrls_offsets = "+658+50"; self.ampl_ctrls.geometry(self.ampl_ctrls_offsets)
+        self.ampl_ctrls_offsets = "+675+50"; self.ampl_ctrls.geometry(self.ampl_ctrls_offsets)
         # Seems, that command below makes accessible the button values from this window to the main
         self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.title("Amplitude controls")
         self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)  # !!! Associate clicking on quit button (X) with the function
 
         # Placing all created widgets in the grid layout on the main window
-        self.zernikesLabel.grid(row=0, rowspan=1, column=0, columnspan=1)
-        self.max_order_selector.grid(row=0, rowspan=1, column=1, columnspan=1)
-        self.refreshPlotButton.grid(row=0, rowspan=1, column=2, columnspan=1)
-        self.plotColorbarButton.grid(row=0, rowspan=1, column=3, columnspan=1)
-        self.flattenButton.grid(row=0, rowspan=1, column=4, columnspan=1)
-        self.deviceSelectorButton.grid(row=7, rowspan=1, column=0, columnspan=1)
-        self.loadInflMatrixButton.grid(row=7, rowspan=1, column=1, columnspan=1)
-        self.holderSelector.grid(row=7, rowspan=1, column=2, columnspan=1, padx=1)
-        self.getVoltsButton.grid(row=7, rowspan=1, column=3, columnspan=1)
-        self.plotWidget.grid(row=1, rowspan=6, column=0, columnspan=5)
+        pad = 2  # overall additional border distances for all widgets
+        self.zernikesLabel.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+        self.max_order_selector.grid(row=0, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
+        self.refreshPlotButton.grid(row=0, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
+        self.plotColorbarButton.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
+        self.flattenButton.grid(row=0, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
+        self.deviceSelectorButton.grid(row=7, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+        self.loadInflMatrixButton.grid(row=7, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
+        self.holderSelector.grid(row=7, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
+        self.getVoltsButton.grid(row=7, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
+        self.plotWidget.grid(row=1, rowspan=6, column=0, columnspan=5, padx=pad, pady=pad)
         self.grid()
         # self.grid_propagate(False)  # Preventing of shrinking of windows to conform with all placed widgets
         # set the value for the OptionMenu and call function for construction of ctrls
@@ -354,8 +355,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 if diff_amplitudes_size > 0:
                     self.diff_amplitudes[m] = np.round((self.check_solution[k, 0] - ampl), 2); m += 1
             k += 1
-        self.send_voltages_button.state(['!disabled'])
-        # TODO - send the voltages using the AmpCom library to a device
+        self.send_voltages_button.state(['!disabled'])  # make possible to send calculated volts to a device
+        self.load_zeroed_indicies_button.config(state="normal")  # make possible to apply additional conditions
 
     def maxV_changed(self, *args):
         """
@@ -409,18 +410,24 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        self.serial_comm_ctrl.destroy()
+        self.serial_comm_ctrl.destroy()  # close the created Toplevel widget
+        self.loadInflMatrixButton.config(state="disabled")  # disable possibility to load influence matrix
         if self.deviceHandle is not None:
-            try:
-                ampcom.AmpCom.AmpZero(self.deviceHandle)
-            except NameError:
-                print("The device not zeroed")
-            finally:
-                self.deviceHandle.close()  # close the serial connection anyway
+            if self.ampcomImported:
+                try:
+                    ampcom_pt.AmpCom.AmpZero2(self.deviceHandle)
+                except NameError:
+                    print("The device not zeroed")
+                finally:
+                    self.deviceHandle.close()  # close the serial connection anyway
+                    if not self.deviceHandle.isOpen():
+                        print("Serial connection closed due to controlling window closed")
+            else:
+                self.deviceHandle.close()  # close the serial connection
                 if not self.deviceHandle.isOpen():
                     print("Serial connection closed due to controlling window closed")
-                self.deviceHandle = None
-                self.device_selector.set(self.listDevices[0])
+            self.deviceHandle = None
+            self.device_selector.set(self.listDevices[0])
 
     def openSerialCommunication(self):
         """
@@ -434,11 +441,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # All initialization steps are analogue to the specified for amplitudes controls
         # Add the additional window evoked by the button for communication with the device
         self.serial_comm_ctrl = tk.Toplevel(master=self)  # additional window, master - the main window
-        self.serial_comm_ctrl_offsets = "+5+775"; self.serial_comm_ctrl.wm_transient(self)
+        self.serial_comm_ctrl_offsets = "+5+788"; self.serial_comm_ctrl.wm_transient(self)
         self.serial_comm_ctrl.geometry(self.serial_comm_ctrl_offsets)
         # !!! Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
         self.serial_comm_ctrl.protocol("WM_DELETE_WINDOW", self.destroySerialCtrlWindow)
-
         # Listing of all available COM ports
         self.ports = []
         for port in list_ports.comports():  # get all ports stored in attributes of the class
@@ -458,14 +464,22 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.connection_status = tk.StringVar(); self.connection_status.set("Not initialized")
             self.connection_label = Label(self.serial_comm_ctrl, textvariable=self.connection_status, foreground='red')
             self.get_device_status_button = Button(self.serial_comm_ctrl, text="Get status", command=self.get_device_status)
+            self.zero_amplitudes_button = Button(self.serial_comm_ctrl, text="Zero outputs", command=self.zero_amplitudes)
+            self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map", command=self.load_zeroed_indicies)
+
             # Placing buttons on the window
             self.port_selector.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
             self.connection_label.grid(row=0, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
-            self.get_device_status_button.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
-            self.send_voltages_button.grid(row=0, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
+            self.get_device_status_button.grid(row=0, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
+            self.send_voltages_button.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
+            self.zero_amplitudes_button.grid(row=1, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
+            self.load_zeroed_indicies_button.grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
             self.serial_comm_ctrl.grid()
+
+            # Disabling the buttons before some conditions fullfilled
             self.send_voltages_button.state(['disabled'])  # after opening the window, set to disabled, before voltages
-            self.get_device_status_button.config(state="disabled")
+            self.get_device_status_button.config(state="disabled"); self.zero_amplitudes_button.config(state="disabled")
+            self.load_zeroed_indicies_button.config(state="disabled")
             self.port_selected()  # try to initialize serial connection on COM port
 
     def port_selected(self, *args):
@@ -486,16 +500,26 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.deviceHandle = None
         try:
             self.deviceHandle = serial.Serial(self.clickable_ports.get(), baudrate=self.baudrate,
-                                              timeout=0.1, write_timeout=0.01)
-            time.sleep(2)  # delay needed in any case for establishing serial communication
+                                              timeout=0.1, write_timeout=0.08)
+            time.sleep(2.2)  # delay needed in any case for establishing serial communication (bad)
             #  However, the delay above isn't proven to be equal to this magic number
             self.connection_status.set("Initialized"); self.connection_label.config(foreground='green')
             print("Serial connection initialized with:", self.deviceHandle.port, self.deviceHandle.baudrate)
             self.get_device_status_button.config(state="normal")
+            # Trying to import additional dependencies to send device specific commands
+            if not self.ampcomImported:
+                try:
+                    import ampcom_pt; global ampcom_pt  # not uploaded internal libra
+                    print("Device controlling library imported")
+                    self.ampcomImported = True
+                except ModuleNotFoundError:
+                    print("Device control communication library are not importable")
+            self.zero_amplitudes_button.config(state="normal")
         except serial.SerialException:
             print("Could not connect to the device on the specified COM port")
             self.send_voltages_button.config(state="disabled")
             self.get_device_status_button.config(state="disabled")
+            self.zero_amplitudes_button.config(state="disabled")
 
     def get_device_status(self):
         """
@@ -510,7 +534,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             print("*****Pending received messages from device:*****")
             print(self.deviceHandle.read(self.deviceHandle.in_waiting).decode("utf-8"))
         # Some hard-coded command upon which the preconfigured device should report the status
-        self.deviceHandle.write(b'?'); time.sleep(0.05)
+        self.deviceHandle.write(b'?'); time.sleep(0.1)  # magic number (bad) suspend to receive full response
         self.report = self.deviceHandle.read(self.deviceHandle.in_waiting).decode("utf-8")
         if len(self.report) > 0:
             print("*************Device reports:*************")
@@ -525,19 +549,58 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        # Trying to import additional dependencies
-        if not self.ampcomImported:
-            try:
-                import ampcom_pt; global ampcom_pt
-                print("Device controlling library imported")
-                self.ampcomImported = True
-            except ModuleNotFoundError:
-                print("Device control communication library are not importable")
         # Calculate parameters for sending to a device
-        if self.ampcomImported:
+        if self.ampcomImported:  # flag showing that internal library imported
             VMAX = self.maxV_selector_value.get()
-            if self.deviceHandle is not None:  # open serial communication and send voltages
-                self.converted_voltages = ampcom_pt.AmpCom.create_varr(self.voltages, VMAX)
+            if self.deviceHandle is not None:  # calculate the proper values to send
+                if self.volts_written:
+                    ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)
+                    self.get_device_status()  # for debugging
+                # self.converted_voltages = ampcom_pt.AmpCom.create_varr(self.voltages, VMAX)
+                if len(self.parse_indicies) > 0:
+                    self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indicies)
+                    print("Write Volt? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
+                    time.sleep(0.25)  # magic number (bad) suspend to receive full response
+                    self.get_device_status()  # for debugging
+                    print("Device updated?", ampcom_pt.AmpCom.AmpUpdate(self.deviceHandle))
+                    self.volts_written = True  # flag tracing that some voltages written into the device
+                else:
+                    print("No voltages sent to a device, the ignored indicies should be provided, use Load Map")
+
+    def zero_amplitudes(self):
+        """
+        Zero all output amplitudes (flatten them).
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.ampcomImported:  # works if the internal library imported
+            ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)
+            self.get_device_status()  # for debugging
+        else:
+            print("Device not zeroed, chekc possibility to import local module")
+
+    def load_zeroed_indicies(self):
+        """
+        Ask user to open text file with stored ignored indicies, separated by spacebars.
+
+        Returns
+        -------
+        None.
+
+        """
+        map_file_path = tk.filedialog.askopenfilename(filetypes=[("Text file", "*.txt")])
+        if map_file_path is not None:
+            if len(map_file_path) > 0:
+                file = open(map_file_path, 'r')
+                string_indicies = file.readline()
+                self.parse_indicies = string_indicies.split(" ")  # the indicies supposed to be separated by spacebars
+                if len(self.parse_indicies) > 0:
+                    for i in range(len(self.parse_indicies)):
+                        self.parse_indicies[i] = int(self.parse_indicies[i])
+                print("Parsed ignored indicies: ", self.parse_indicies)
 
     def destroy(self):
         """
@@ -548,12 +611,17 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        if self.deviceHandle is not None:  # send to the device close command
-            try:
-                ampcom.AmpCom.AmpZero(self.deviceHandle)
-            except NameError:
-                print("The device not zeroed")
-            finally:
+        if self.deviceHandle is not None:  # close connection to a device
+            if self.ampcomImported:
+                try:
+                    ampcom_pt.AmpCom.AmpZero(self.deviceHandle)
+                except NameError:
+                    print("The device not zeroed")
+                finally:
+                    self.deviceHandle.close()  # close the serial connection anyway
+                    if not self.deviceHandle.isOpen():
+                        print("Serial connection closed")
+            else:
                 self.deviceHandle.close()  # close the serial connection anyway
                 if not self.deviceHandle.isOpen():
                     print("Serial connection closed")
