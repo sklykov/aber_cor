@@ -14,7 +14,7 @@ from multiprocessing import Queue as ProcessQueue
 # %% Exception checker
 class CheckMessagesForExceptions(Thread):
     """
-    Threaded class for continuous and independent loop running for checking that any Exception reported anythere in the GUI program.
+    Threaded class for continuous and independent loop running for checking that any Exception reported anywhere in the GUI program.
 
     If any exception is caught, then the Quit or Exit button will be clicked.
     """

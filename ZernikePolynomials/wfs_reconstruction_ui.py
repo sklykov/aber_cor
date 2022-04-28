@@ -263,7 +263,6 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.path_loaded_picture = open_image_dialog.name  # record absolute path to the opened image
             self.loaded_image = io.imread(self.path_loaded_picture, as_gray=True)
             self.loaded_image = img_as_ubyte(self.loaded_image)  # convert to the ubyte U8 image
-            rows, cols = self.loaded_image.shape
             if self.calibration:  # draw the loaded image in the opened calibration window (Toplevel)
                 if self.calibrate_axes is None:
                     self.calibrate_axes = self.calibrate_figure.add_subplot()  # add axes without dimension
@@ -336,7 +335,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             input_value = self.radius_value.get()
             if input_value < 1.0 or input_value > 100.0:  # bounds for an ubyte (U8) image
                 self.radius_value.set(self.default_radius)
-        except Exception:
+        except tk.TclError:
             self.radius_value.set(self.default_radius)
 
     def redraw_loaded_image(self):
@@ -367,8 +366,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        self.redraw_loaded_image()  # call for refreshing image without plotted CoMs and subapertures
-        self.activate_load_aber_pic_count = 0  # disactivate the possibility to load aberrated picture before calibration complete
+        self.redraw_loaded_image()  # call for refreshing image without plotted CoMs and sub-apertures
+        self.activate_load_aber_pic_count = 0  # dis-activate the possibility to load aberrated picture before calibration complete
         self.load_button.config(state="disabled")
         (self.coms_spots, self.theta0, self.rho0,
          self.integration_limits) = get_integral_limits_nonaberrated_centers(self.calibrate_axes,

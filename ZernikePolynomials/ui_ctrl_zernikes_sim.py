@@ -30,7 +30,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         super().__init__(master)  # initialize the main window (frame) for all widgets
         self.plotColorbar = False
         self.master.title("Zernike's polynomials controls and representation")
-        master.geometry("+5+50")  # put the main window on the (+x, +y) coordinate away from the top left monitor coordinate
+        self.master.geometry("+5+50")  # put the main window on the (+x, +y) coordinate away from the top left monitor coordinate
         self.amplitudes = [0.0, 0.0]  # default amplitudes for the 1st order
         self.orders = [(-1, 1), (1, 1)]; self.flagFlattened = False; self.changedSliders = 1
         self.amplitudes_sliders_dict = {}
@@ -41,7 +41,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.librariesImported = False  # libraries for import - PySerial and local device controlling library
         self.baudrate = 115200  # default rate for serial communication
         self.ampcomImported = False; self.converted_voltages = []; self.volts_written = False
-        self.parse_indicies = []
+        self.parse_indices = []
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
@@ -348,11 +348,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if diff_amplitudes_size > 0:  # only if some non-zero amplitudes specified by a user
             self.diff_amplitudes = np.zeros(diff_amplitudes_size)
             m = 0  # index for collecting calculated differences
-        for ampl in self.zernike_amplitudes:
-            if abs(ampl) > 1.0E-6:  # non-zero amplitude provided by the user
-                # print("Difference between amplitude from UI and restored after calculation:",
-                #       np.round(abs(self.check_solution[k, 0] - ampl), 2))
-                if diff_amplitudes_size > 0:
+            for ampl in self.zernike_amplitudes:
+                if abs(ampl) > 1.0E-6:  # non-zero amplitude provided by the user
+                    # print("Difference between amplitude from UI and restored after calculation:",
+                    #       np.round(abs(self.check_solution[k, 0] - ampl), 2))
                     self.diff_amplitudes[m] = np.round((self.check_solution[k, 0] - ampl), 2); m += 1
             k += 1
         self.send_voltages_button.state(['!disabled'])  # make possible to send calculated volts to a device
@@ -465,7 +464,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.connection_label = Label(self.serial_comm_ctrl, textvariable=self.connection_status, foreground='red')
             self.get_device_status_button = Button(self.serial_comm_ctrl, text="Get status", command=self.get_device_status)
             self.zero_amplitudes_button = Button(self.serial_comm_ctrl, text="Zero outputs", command=self.zero_amplitudes)
-            self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map", command=self.load_zeroed_indicies)
+            self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map", command=self.load_zeroed_indices)
 
             # Placing buttons on the window
             self.port_selector.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
@@ -476,7 +475,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.load_zeroed_indicies_button.grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
             self.serial_comm_ctrl.grid()
 
-            # Disabling the buttons before some conditions fullfilled
+            # Disabling the buttons before some conditions fulfilled
             self.send_voltages_button.state(['disabled'])  # after opening the window, set to disabled, before voltages
             self.get_device_status_button.config(state="disabled"); self.zero_amplitudes_button.config(state="disabled")
             self.load_zeroed_indicies_button.config(state="disabled")
@@ -557,15 +556,15 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)
                     self.get_device_status()  # for debugging
                 # self.converted_voltages = ampcom_pt.AmpCom.create_varr(self.voltages, VMAX)
-                if len(self.parse_indicies) > 0:
-                    self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indicies)
+                if len(self.parse_indices) > 0:
+                    self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indices)
                     print("Write Volt? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
                     time.sleep(0.25)  # magic number (bad) suspend to receive full response
                     self.get_device_status()  # for debugging
                     print("Device updated?", ampcom_pt.AmpCom.AmpUpdate(self.deviceHandle))
                     self.volts_written = True  # flag tracing that some voltages written into the device
                 else:
-                    print("No voltages sent to a device, the ignored indicies should be provided, use Load Map")
+                    print("No voltages sent to a device, the ignored indices should be provided, use Load Map")
 
     def zero_amplitudes(self):
         """
@@ -580,11 +579,11 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)
             self.get_device_status()  # for debugging
         else:
-            print("Device not zeroed, chekc possibility to import local module")
+            print("Device not zeroed, check possibility to import local module")
 
-    def load_zeroed_indicies(self):
+    def load_zeroed_indices(self):
         """
-        Ask user to open text file with stored ignored indicies, separated by spacebars.
+        Ask user to open text file with stored ignored indices, separated by spacebars.
 
         Returns
         -------
@@ -595,12 +594,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if map_file_path is not None:
             if len(map_file_path) > 0:
                 file = open(map_file_path, 'r')
-                string_indicies = file.readline()
-                self.parse_indicies = string_indicies.split(" ")  # the indicies supposed to be separated by spacebars
-                if len(self.parse_indicies) > 0:
-                    for i in range(len(self.parse_indicies)):
-                        self.parse_indicies[i] = int(self.parse_indicies[i])
-                print("Parsed ignored indicies: ", self.parse_indicies)
+                string_indices = file.readline()
+                self.parse_indices = string_indices.split(" ")  # the indices supposed to be separated by spacebars
+                if len(self.parse_indices) > 0:
+                    for i in range(len(self.parse_indices)):
+                        self.parse_indices[i] = int(self.parse_indices[i])
+                print("Parsed ignored indices: ", self.parse_indices)
 
     def destroy(self):
         """

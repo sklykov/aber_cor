@@ -39,9 +39,8 @@ class SimUscope(QMainWindow):
     def __init__(self, img_height, img_width, applicationHandle: QApplication):
         """Create overall UI inside the QMainWindow widget."""
         super().__init__()
-        self.imageUpdater = None  # Added suggested definition at initialization stage
-        self.roi = None
-        self.cameraHandle = None  # Added suggested definition at initialization stage
+        # Holders for initialized later variables
+        self.imageUpdater = None; self.roi = None; self.cameraHandle = None
         pyqtgraph.setConfigOptions(imageAxisOrder='row-major')  # Set for conforming with images from the camera
         self.applicationHandle = applicationHandle  # handle to the main application for exit it in the appropriate place
         self.messages2Camera = Queue(maxsize=10)  # Initialize message queue for communication with the camera (simulated or not)
@@ -54,26 +53,25 @@ class SimUscope(QMainWindow):
         self.img_width_default = img_width; self.img_height_default = img_height
         self.img = np.zeros((self.img_height, self.img_width), dtype='uint8')  # Black initial image
         self.setWindowTitle("Camera control / simulation GUI"); self.setGeometry(200, 200, 840, 800)
+
         # PlotItem allows showing the axes and restrict the mouse usage over the image
         self.plot = pyqtgraph.PlotItem()
         self.plot.getViewBox().setMouseEnabled(False, False)  # !!!: Disable the possibility of move image by mouse
-        # ImageView - for showing the generated image
-        self.imageWidget = pyqtgraph.ImageView(view=self.plot)  # The main widget for image showing
+        self.imageWidget = pyqtgraph.ImageView(view=self.plot)  # The main widget for image showing (ImageView)
         self.imageWidget.ui.roiBtn.hide(); self.imageWidget.ui.menuBtn.hide()   # Hide ROI, Norm buttons from the ImageView
         self.imageWidget.setImage(self.img)  # Set image for representation in the ImageView widget
-        # connecting user interaction with levels buttons - below
-        self.imageWidget.ui.histogram.sigLevelChangeFinished.connect(self.histogramLevelsChanged)
-        # QWidget - main widget window for grid layout
+        self.imageWidget.ui.histogram.sigLevelChangeFinished.connect(self.histogramLevelsChanged)  # connect with command
         self.qwindow = QWidget()  # The composing of all buttons and frame for image representation into one main widget
-        # Selector of type of a camera - Simulated or PCO one
+
+        # Buttons specification
         self.cameraSelector = QComboBox(); self.cameraSelector.addItems(["Simulated", "PCO"])
-        # self.cameraSelector.addItems(["Simulated Threaded", "PCO", "PCO Process"])
         self.cameraSelector.setCurrentText("PCO")  # Default camera for initialization - the simulated one
         self.cameraSelector.currentTextChanged.connect(self.activeCameraChanged)  # Attach handlers for camera choosing
         self.cameraSelLabel = QLabel("Camera Type"); self.cameraSelector.setEditable(True)  # setEditable is needed for setAlignment
         self.cameraSelector.lineEdit().setAlignment(Qt.AlignCenter); self.cameraSelector.lineEdit().setReadOnly(True)
         vboxSelector = QVBoxLayout(); vboxSelector.addWidget(self.cameraSelLabel); vboxSelector.addWidget(self.cameraSelector)
         self.cameraSelLabel.setAlignment(Qt.AlignCenter)  # Align the label text on the center
+
         # ROI size selectors
         self.heightROI = QSpinBox(); self.heightROI.setSingleStep(2); self.heightROI.setMaximum(self.img_width)  # swapped
         self.widthROI = QSpinBox(); self.widthROI.setSingleStep(2); self.widthROI.setMaximum(self.img_height)  # swapped
@@ -83,6 +81,7 @@ class SimUscope(QMainWindow):
         vboxROI = QVBoxLayout(); vboxROI.addWidget(self.widthROI); vboxROI.addWidget(self.heightROI)
         self.widthROI.valueChanged.connect(self.roiSizesSpecified); self.heightROI.valueChanged.connect(self.roiSizesSpecified)
         self.widthROI.setKeyboardTracking(False); self.heightROI.setKeyboardTracking(False)  # Disable instant tracking of any changes
+
         # Push buttons for events evoking
         self.snapSingleImgButton = QPushButton("Generate Single Pic"); self.snapSingleImgButton.clicked.connect(self.snap_single_img)
         self.continuousStreamButton = QPushButton("Continuous Generation")  # Switches on/off continuous generation
@@ -94,10 +93,10 @@ class SimUscope(QMainWindow):
         self.disableAutoLevelsButton = QPushButton("Disable pixels leveling"); self.disableAutoLevelsButton.setCheckable(True)
         self.disableAutoLevelsButton.clicked.connect(self.disableAutoLevelsCalculation)
         self.exposureTimeButton = QSpinBox(); self.exposureTimeButton.setSingleStep(1); self.exposureTimeButton.setSuffix(" ms")
-        self.exposureTimeButton.setPrefix("Exposure time: "); self.exposureTimeButton.setMinimum(1); self.exposureTimeButton.setMaximum(1000)
-        self.exposureTimeButton.setValue(100); self.exposureTimeButton.adjustSize()
-        self.checkPCOcameraStatus = QPushButton("Check camera status"); self.checkPCOcameraStatus.setVisible(False)
-        self.checkPCOcameraStatus.clicked.connect(self.checkCameraStatus)
+        self.exposureTimeButton.setPrefix("Exposure time: "); self.exposureTimeButton.setMinimum(1)
+        self.exposureTimeButton.setMaximum(1000); self.exposureTimeButton.setValue(100)
+        self.exposureTimeButton.adjustSize(); self.checkPCOcameraStatus = QPushButton("Check camera status")
+        self.checkPCOcameraStatus.setVisible(False); self.checkPCOcameraStatus.clicked.connect(self.checkCameraStatus)
         self.exposureTimeButton.setKeyboardTracking(False)  # !!! special function to disable emitting of signals for each typed value
         # E.g., when the user is typing "100" => emit 3 signals for 3 numbers, if keyboardTracking(True)
         self.exposureTimeButton.valueChanged.connect(self.exposureTimeChanged)
@@ -106,12 +105,15 @@ class SimUscope(QMainWindow):
         self.saveSnapImg = QPushButton("Save Single Image"); self.saveSnapImg.clicked.connect(self.saveSingleSnapImg)
         self.saveSnapImg.setDisabled(True)  # disable the saving image before any image generated / displayed
         self.putROI = QPushButton("ROI selector"); self.putROI.clicked.connect(self.putROIonImage)
-        self.generateException = QPushButton("Generate Exception"); self.generateException.clicked.connect(self.generateMessageWithException)
+        self.generateException = QPushButton("Generate Exception")
+        self.generateException.clicked.connect(self.generateMessageWithException)
         self.cropImageButton = QPushButton("Crop Image"); self.cropImageButton.clicked.connect(self.cropImage)
-        self.restoreFullImgButton = QPushButton("Restore Full Image"); self.restoreFullImgButton.clicked.connect(self.restoreFullImage)
+        self.restoreFullImgButton = QPushButton("Restore Full Image")
+        self.restoreFullImgButton.clicked.connect(self.restoreFullImage)
         self.cropImageButton.setDisabled(True); self.restoreFullImgButton.setDisabled(True)  # until some roi selected
         self.quitButton = QPushButton("Quit"); self.quitButton.setStyleSheet("color: red")
         self.quitButton.clicked.connect(self.quitClicked)
+
         # Manual image level inputs and update them from the slider control on histogram viewer from the ImageWidget
         self.minLevelButton = QSpinBox(); self.maxLevelButton = QSpinBox()
         self.minLevelButton.valueChanged.connect(self.pixelValuesChanged)
@@ -122,8 +124,9 @@ class SimUscope(QMainWindow):
         self.minLevelButton.setPrefix("Min px: "); self.maxLevelButton.setPrefix("Max px: ")
         self.minLevelButton.setMaximumWidth(120); self.maxLevelButton.setMaximumWidth(120)
         self.minLevelButton.setKeyboardTracking(False); self.maxLevelButton.setKeyboardTracking(False)
-        vboxLevels = QVBoxLayout(); vboxLevels.addWidget(self.minLevelButton); vboxLevels.addWidget(self.maxLevelButton)
-        vboxLevels.setAlignment(Qt.AlignCenter)
+        vboxLevels = QVBoxLayout(); vboxLevels.addWidget(self.minLevelButton)
+        vboxLevels.addWidget(self.maxLevelButton); vboxLevels.setAlignment(Qt.AlignCenter)
+
         # Grid layout below - the main layout pattern for all buttons and windows put on the Main Window (GUI)
         grid = QGridLayout(self.qwindow)  # grid layout allows better layout of buttons and frames
         grid.addLayout(vboxSelector, 0, 0, 1, 1)  # Add selector of a camera
@@ -682,10 +685,10 @@ class SimUscope(QMainWindow):
                 if self.imageUpdater.is_alive():
                     self.imageUpdater.join(timeout=((2*self.exposureTimeButton.value())/1000))  # wait the image updater thread stopped
                     print("Image Updater stopped")
-            self.messages2Camera.put_nowait("Stop Program")  # Send the message to stop the imaging and deinitialize the camera:
+            self.messages2Camera.put_nowait("Stop Program")  # Send the message to stop the imaging and de-initialize the camera:
             if self.cameraHandle is not None:
                 if self.cameraHandle.is_alive():  # if the threaded associated with the camera process hasn't been finished
-                    self.cameraHandle.join(timeout=self.globalTimeout)  # wait the camera closing / deinitializing
+                    self.cameraHandle.join(timeout=self.globalTimeout)  # wait the camera closing / de-initializing
                     print("Camera process released")
         # Stop Exceptions checker and Messages Printer
         if self.exceptionChecker.is_alive():

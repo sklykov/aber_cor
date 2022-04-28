@@ -27,15 +27,15 @@ class CameraWrapper(Process):
     image_width: int; image_height: int
     cameraReference = None
 
-    def __init__(self, messagesQueue: Queue, exceptionsQueue: Queue, imagesQueue: Queue, messagesToCaller: Queue,
-                 exposure_time_ms: int, img_width: int, img_height: int, camera_type: str = "Simulated"):
+    def __init__(self, messages_queue: Queue, exceptions_queue: Queue, images_queue: Queue, messages2caller: Queue,
+                 exposure_t_ms: int, image_width: int, image_height: int, camera_type: str = "Simulated"):
         Process.__init__(self)  # Initialize this class on the separate process with its own memory and core
-        self.messagesQueue = messagesQueue  # For receiving the commands to stop / start live stream
-        self.exceptionsQueue = exceptionsQueue  # For adding the exceptions that should stop the main program
-        self.messagesToCaller = messagesToCaller  # For sending internal messages from this class for debugging
-        self.imagesQueue = imagesQueue  # For storing the acquired images
+        self.messagesQueue = messages_queue  # For receiving the commands to stop / start live stream
+        self.exceptionsQueue = exceptions_queue  # For adding the exceptions that should stop the main program
+        self.messagesToCaller = messages2caller  # For sending internal messages from this class for debugging
+        self.imagesQueue = images_queue  # For storing the acquired images
         self.liveStream = False  # Set default live stream state to false
-        self.exposure_time_ms = exposure_time_ms  # Initializing with the default exposure time
+        self.exposure_time_ms = exposure_t_ms  # Initializing with the default exposure time
         self.camera_type = camera_type  # Type of initialized camera
         # Initialization code for the PCO camera -> MOVED to the run() because it's impossible to pickle handle to the camera
         if self.camera_type == "PCO":
@@ -47,8 +47,8 @@ class CameraWrapper(Process):
         elif self.camera_type == "Simulated":
             self.cameraReference = None  # no associated library call to any API functions
             self.initialized = True  # Additional flag for the start the loop in the run method
-            self.max_width = img_width; self.max_height = img_height
-            self.image_height = img_height; self.image_width = img_width
+            self.max_width = image_width; self.max_height = image_height
+            self.image_height = image_height; self.image_width = image_width
             try:
                 self.generate_noise_picture()
                 self.messagesToCaller.put_nowait("The Simulated camera initialized")
@@ -74,7 +74,7 @@ class CameraWrapper(Process):
 
         """
         # !!! Below - initialization code for the PCO camera, because in the __init__() method it's impossible to make,
-        # because the handle returned by the call pco.Camera() is the unpickleable object
+        # because the handle returned by the call pco.Camera() is the not pickleable object
         if self.camera_type == "PCO":
             try:
                 self.cameraReference = pco.Camera(debuglevel='none')  # open connection to the camera with some default mode
@@ -268,13 +268,13 @@ class CameraWrapper(Process):
                 except Empty:
                     pass
 
-    def setExposureTime(self, exposure_time_ms: int):
+    def setExposureTime(self, exposure_t_ms: int):
         """
         Set exposure time for the camera.
 
         Parameters
         ----------
-        exposure_time_ms : int
+        exposure_t_ms : int
             Provided value for exposure time from GUI.
 
         Returns
@@ -282,10 +282,10 @@ class CameraWrapper(Process):
         None.
 
         """
-        if isinstance(exposure_time_ms, int):
-            if exposure_time_ms <= 0:  # exposure time cannot be 0
-                exposure_time_ms = 1
-            self.exposure_time_ms = exposure_time_ms
+        if isinstance(exposure_t_ms, int):
+            if exposure_t_ms <= 0:  # exposure time cannot be 0
+                exposure_t_ms = 1
+            self.exposure_time_ms = exposure_t_ms
             if self.cameraReference is not None and self.camera_type == "PCO":  # if the camera is really activated, then call the function
                 self.cameraReference.set_exposure_time(self.exposure_time_ms/1000)
                 # Report back the set exposure time for the actual camera
@@ -370,7 +370,7 @@ class CameraWrapper(Process):
 
     def close(self):
         """
-        Deinitialize the camera and close the connection to it.
+        De-initialize the camera and close the connection to it.
 
         Returns
         -------

@@ -2,7 +2,7 @@
 Collection of Python scripts for reconstruction and estimation of optical aberrations. 
 
 - It consists of two folders up to now, in one there are files for calculation of Zernike polynomials sums for representing 
-a phase front, reconstruction of wafefronts (see details in the folder "ZernikePolynomials"). Another one - collection of 
+a phase front, reconstruction of wavefronts (see details in the folder "ZernikePolynomials"). Another one - collection of 
 scripts for controlling sCMOS camera, providing interface for specification of Zernike's polynomials 
 amplitudes (for further sending to a device under development) and their sum representation for the user. 
 - All scripts have been developed in the Spyder IDE with common dependencies for numerical calculations: scipy(numpy),
