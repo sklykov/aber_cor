@@ -30,11 +30,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         super().__init__(master)  # initialize the main window (frame) for all widgets
         self.plotColorbar = False
         self.master.title("Zernike's polynomials controls and representation")
-        self.master.geometry("+5+50")  # put the main window on the (+x, +y) coordinate away from the top left monitor coordinate
+        self.master.geometry("+3+40")  # put the main window on the (+x, +y) coordinate away from the top left monitor coordinate
         self.amplitudes = [0.0, 0.0]  # default amplitudes for the 1st order
         self.orders = [(-1, 1), (1, 1)]; self.flagFlattened = False; self.changedSliders = 1
-        self.amplitudes_sliders_dict = {}
-        self.minV = 200; self.maxV = 400
+        self.amplitudes_sliders_dict = {}; self.minV = 200; self.maxV = 400
         self.deviceHandle = None  # holder for the opened serial communication handle
         self.serial_comm_ctrl = None  # empty holder for serial communication ctrl
         self.voltages_bits = None  # empty holder because of asking in the end of the script to return this value
@@ -49,7 +48,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Widgets creation and specification (almost all - buttons)
         self.refreshPlotButton = Button(self, text="Refresh Plot", command=self.plot_zernikes)
         self.zernikesLabel = Label(self, text=" Zernike polynoms ctrls up to:")
-        self.figure = plot_figure.Figure(figsize=(5, 5))  # Default empty figure for phase profile
+        self.figure = plot_figure.Figure(figsize=(4.9, 4.9))  # Default empty figure for phase profile
         self.canvas = FigureCanvasTkAgg(self.figure, master=self); self.plotWidget = self.canvas.get_tk_widget()
 
         # !!! Below - the way of how associate tkinter buttons with the variables and their states! THEY ARE DECOUPLED!
@@ -91,7 +90,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Below - additional window for holding the sliders with the amplitudes
         self.ampl_ctrls = tk.Toplevel(master=self)  # additional window, master - the main window
         # put this additional window with some offset for the representing it next to the main
-        self.ampl_ctrls_offsets = "+675+50"; self.ampl_ctrls.geometry(self.ampl_ctrls_offsets)
+        self.ampl_ctrls_offsets = "+672+40"; self.ampl_ctrls.geometry(self.ampl_ctrls_offsets)
         # Seems, that command below makes accessible the button values from this window to the main
         self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.title("Amplitude controls")
         self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)  # !!! Associate clicking on quit button (X) with the function
@@ -197,8 +196,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        # print(selected_order)  # FOR DEBUG
-        n_orders = int(selected_order[0])
+        n_orders = int(selected_order[0]); pad = 1
         # Refresh the TopLevel window and the associated dictionary with buttons
         self.ampl_ctrls.destroy(); self.ampl_ctrls = tk.Toplevel(master=self)
         self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)
@@ -219,7 +217,6 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                                                                 command=self.sliderValueChanged,
                                                                 repeatinterval=220)
                 # simplest way of packing - adding buttons on top of each other
-                # self.amplitudes_sliders_dict[(m, n)].pack(side=tk.TOP)
                 self.amplitudes.append(0.0)  # assign all zeros as the flat field
                 m += 2  # according to the specification
         # Placing the sliders on the window
@@ -233,7 +230,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 # self.amplitudes_sliders_dict[(m, n)].grid(row=(rows_offset + row_cursor), rowspan=1,
                 #                                           column=(order-1), columnspan=1)
                 self.amplitudes_sliders_dict[(m, n)].grid(row=(order-1), rowspan=1,
-                                                          column=(rows_offset + row_cursor), columnspan=1)
+                                                          column=(rows_offset + row_cursor),
+                                                          columnspan=1, padx=pad, pady=pad)
                 m += 2; row_cursor += 1
         self.plot_zernikes()  # refresh the plot, not retain any values
         # print(self.orders)
@@ -440,7 +438,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # All initialization steps are analogue to the specified for amplitudes controls
         # Add the additional window evoked by the button for communication with the device
         self.serial_comm_ctrl = tk.Toplevel(master=self)  # additional window, master - the main window
-        self.serial_comm_ctrl_offsets = "+5+788"; self.serial_comm_ctrl.wm_transient(self)
+        self.serial_comm_ctrl_offsets = "+2+765"; self.serial_comm_ctrl.wm_transient(self)
         self.serial_comm_ctrl.geometry(self.serial_comm_ctrl_offsets)
         # !!! Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
         self.serial_comm_ctrl.protocol("WM_DELETE_WINDOW", self.destroySerialCtrlWindow)
@@ -516,6 +514,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.zero_amplitudes_button.config(state="normal")
         except serial.SerialException:
             print("Could not connect to the device on the specified COM port")
+            self.connection_status.set("Not initialized"); self.connection_label.config(foreground='red')
             self.send_voltages_button.config(state="disabled")
             self.get_device_status_button.config(state="disabled")
             self.zero_amplitudes_button.config(state="disabled")
