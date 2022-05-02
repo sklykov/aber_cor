@@ -14,6 +14,7 @@ from zernike_pol_calc import get_plot_zps_polar, get_classical_polynomial_name, 
 import matplotlib.figure as plot_figure
 import time
 import numpy as np
+from scipy.io import loadmat
 
 
 # %% GUI class
@@ -40,7 +41,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.librariesImported = False  # libraries for import - PySerial and local device controlling library
         self.baudrate = 115200  # default rate for serial communication
         self.ampcomImported = False; self.converted_voltages = []; self.volts_written = False
-        self.parse_indices = []
+        self.parse_indices = []; self.offset_zernikes = np.zeros(shape=1); self.fitted_offsets = np.zeros(shape=1)
+        self.corrections_loaded = False; self.flatten_field_coefficients = np.zeros(shape=1)
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
@@ -324,23 +326,22 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         self.zernike_amplitudes = np.zeros(self.influence_matrix.shape[0])  # initial amplitudes of all polynomials = 0
-        # According to the documentation, piston is included, OSA index -= 1 from the definition
-        diff_amplitudes_size = 0  # for collecting difference between specified amplitudes and back calculated after volts calc.
+        # According to the documentation, piston is included
+        diff_amplitudes_size = 0  # for collecting difference between specified amplitudes and calculation back
         for key in self.amplitudes_sliders_dict.keys():  # loop through all UI ctrls
             if abs(self.amplitudes_sliders_dict[key].get()) > 1.0E-6:  # non-zero amplitude provided by the user
                 (m, n) = key
-                # print("Defined orders:", (m, n))
                 diff_amplitudes_size += 1  # count for non-zero specified amplitudes
-                j = get_osa_standard_index(m, n)  # according to Wiki
-                # j -= 1  # according to the specification, but seems a mistake in docs ???
-                # print("Defined index: ", (j+1))
+                j = get_osa_standard_index(m, n)  # calculation implemented according to the Wiki
                 self.zernike_amplitudes[j] = self.amplitudes_sliders_dict[key].get()
+        # !!! Additional correction of initial deformations (aberrations)
+        if self.corrections_loaded:
+            self.corrected_zernike_amplitudes = np.zeros(self.zernike_amplitudes.shape[0])
+            for j in range((self.zernike_amplitudes.shape[0])):
+                self.corrected_zernike_amplitudes = self.zernike_amplitudes[j] - self.flatten_field_coefficients[j]
         self.voltages = gv.solve_InfMat(self.influence_matrix, self.zernike_amplitudes, self.maxV_selector_value.get())
         self.voltages = np.expand_dims(self.voltages, axis=1)  # explicit making of 2D array by adding additional axis
-        # print("Volt sizes: ", np.shape(self.voltages))
-        # print("Influence matrix: ", np.shape(self.influence_matrix))
         # Verification of the proper calculation
-        # print("Solution :", (self.influence_matrix*np.power(self.voltages, 2)))
         self.check_solution = self.influence_matrix*np.power(self.voltages, 2)
         k = 0  # index of collected amplitudes collected from the UI
         if diff_amplitudes_size > 0:  # only if some non-zero amplitudes specified by a user
@@ -398,7 +399,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         """
         pass
 
-    def destroySerialCtrlWindow(self):
+    def destroy_serial_ctrl_window(self):
         """
         Rewrite the default destroy function for the instance of Toplevel window for closing serial connection.
 
@@ -412,7 +413,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if self.deviceHandle is not None:
             if self.ampcomImported:
                 try:
-                    ampcom_pt.AmpCom.AmpZero2(self.deviceHandle)
+                    ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.25)
                 except NameError:
                     print("The device not zeroed")
                 finally:
@@ -441,14 +442,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.serial_comm_ctrl_offsets = "+2+765"; self.serial_comm_ctrl.wm_transient(self)
         self.serial_comm_ctrl.geometry(self.serial_comm_ctrl_offsets)
         # !!! Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
-        self.serial_comm_ctrl.protocol("WM_DELETE_WINDOW", self.destroySerialCtrlWindow)
+        self.serial_comm_ctrl.protocol("WM_DELETE_WINDOW", self.destroy_serial_ctrl_window)
         # Listing of all available COM ports
         self.ports = []
         for port in list_ports.comports():  # get all ports stored in attributes of the class
             self.ports.append(port.name)
         if len(self.ports) == 0:
             print("No COM ports detected")
-            self.destroySerialCtrlWindow()
+            self.destroy_serial_ctrl_window()  # close the additional contolling window for serial connection
             print("The selection of device will go again to the Pure Simulated")
             self.device_selector.set(self.listDevices[0])
         else:
@@ -463,6 +464,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.get_device_status_button = Button(self.serial_comm_ctrl, text="Get status", command=self.get_device_status)
             self.zero_amplitudes_button = Button(self.serial_comm_ctrl, text="Zero outputs", command=self.zero_amplitudes)
             self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map", command=self.load_zeroed_indices)
+            self.load_flat_field_button = Button(self.serial_comm_ctrl, text="Load Flattening", command=self.load_flat_field)
 
             # Placing buttons on the window
             self.port_selector.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
@@ -470,7 +472,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.get_device_status_button.grid(row=0, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
             self.send_voltages_button.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
             self.zero_amplitudes_button.grid(row=1, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
-            self.load_zeroed_indicies_button.grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
+            self.load_zeroed_indicies_button.grid(row=1, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
+            self.load_flat_field_button.grid(row=1, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
             self.serial_comm_ctrl.grid()
 
             # Disabling the buttons before some conditions fulfilled
@@ -554,10 +557,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 if self.volts_written:
                     ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)
                     self.get_device_status()  # for debugging
-                # self.converted_voltages = ampcom_pt.AmpCom.create_varr(self.voltages, VMAX)
                 if len(self.parse_indices) > 0:
                     self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indices)
-                    print("Write Volt? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
+                    print("Volts Written? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
                     time.sleep(0.25)  # magic number (bad) suspend to receive full response
                     self.get_device_status()  # for debugging
                     print("Device updated?", ampcom_pt.AmpCom.AmpUpdate(self.deviceHandle))
@@ -600,6 +602,43 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                         self.parse_indices[i] = int(self.parse_indices[i])
                 print("Parsed ignored indices: ", self.parse_indices)
 
+    def load_flat_field(self):
+        """
+        Load corrections for flattening the aberrations distribution (applied by a device).
+
+        Returns
+        -------
+        None.
+
+        """
+        path_fitted_offses = tk.filedialog.askopenfilename(filetypes=[("Matlab files", "*.mat")], title="Open fitted offsets")
+        if path_fitted_offses is not None and len(path_fitted_offses) > 0:
+            try:
+                self.fitted_offsets = loadmat(path_fitted_offses)['Zerns']  # scipy.io.loadmat, specific key for dict
+            except KeyError as e:
+                print("The precoded key " + str(e) + " is not available in opened mat file")
+            if isinstance(self.fitted_offsets, np.ndarray):
+                print("Fitted offsets for Zernike amplitudes loaded")
+                # Proceed for loading next file
+                path_offsets = tk.filedialog.askopenfilename(filetypes=[("Matlab files", "*.mat")],
+                                                             title="Open Zernikes offsets")
+                if path_offsets is not None and len(path_offsets) > 0:
+                    try:
+                        self.offset_zernikes = loadmat(path_offsets)['Off_Zern_Coeffs']  # scipy.io.loadmat
+                    except KeyError as e:
+                        print("The precoded key " + str(e) + " is not available in opened mat file")
+                    if isinstance(self.offset_zernikes, np.ndarray):
+                        print("Offsets for Zernike amplitudes loaded")
+                        # ??? Below - check the compliance with the legacy code
+                        self.flatten_field_coefficients = -self.fitted_offsets + self.offset_zernikes
+                        self.corrections_loaded = True
+                else:
+                    # Disabling now the flattening field coefficients only by not loading any file
+                    self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(size=1)
+        else:
+            # Disabling now the flattening field coefficients only by not loading any file
+            self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(size=1)
+
     def destroy(self):
         """
         Handle the closing (destroying) of the main window event.
@@ -634,4 +673,4 @@ if __name__ == "__main__":
     # Below - get the calculated values during the session for testing (debugging) applied functions
     check_solution = ui_ctrls.check_solution; zernike_amplitudes = ui_ctrls.zernike_amplitudes
     diff_amplitudes = ui_ctrls.diff_amplitudes; voltages_bits = ui_ctrls.voltages_bits
-    converted_voltages = ui_ctrls.converted_voltages
+    converted_voltages = ui_ctrls.converted_voltages; inspect_offsets = ui_ctrls.flatten_field_coefficients
