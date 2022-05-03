@@ -197,8 +197,8 @@ def plot_zps_polar(orders: list, step_r: float = 0.005, step_theta: float = 0.5,
         alpha_coefficients = [1.0]*len(orders)
     R, Theta, Z = zernike_polynomials_sum_tuned(orders, alpha_coefficients, step_r=step_r, step_theta=step_theta)
     # Plotting and formatting - Polar projection + plotting the colormap
-    plt.figure(); axes = plt.axes(projection='polar'); axes.set_theta_direction(-1)  # set the clockwise counting of theta
-    # plt.grid(False); plt.pcolormesh(Theta, R, Z, cmap=cm.coolwarm)  # the windows with plots are not responsive!
+    plt.figure(figsize=(4, 4))  # since the figure has the circular shape, better draw it on equal box
+    axes = plt.axes(projection='polar'); axes.set_theta_direction(-1)  # set the clockwise counting of theta
     plt.contourf(Theta, R, Z, 100, cmap=cm.coolwarm)  # produces more responsive plots!
     plt.title(title); plt.axis('off')
     if show_amplitudes:
@@ -588,8 +588,8 @@ if __name__ == '__main__':
     test()  # Testing implemented recurrence equations and tabular values
 
     # %% Plotting results over the surface
-    step_r = 0.01; step_theta = 1.0  # in grads
-    orders = [(-1, 1)]  # Y tilt
-    plot_zps_polar(orders, step_r, step_theta, "Y tilt")
-    zernikes_set = [(-1, 1), (1, 1)]
-    plot_zps_polar(zernikes_set, step_r, step_theta, "Sum tilts with equal amplitudes", show_amplitudes=True)
+    step_r = 0.01; step_theta = 0.5  # in grads
+    orders = [(-1, 1)]  # specification of (m, n) order for polynomial plotting
+    plot_zps_polar(orders, step_r, step_theta, "")
+    zernikes_set = [(-1, 1), (1, 1)]  # vertical and horizontal tilts
+    # plot_zps_polar(zernikes_set, step_r, step_theta, "Sum tilts with equal amplitudes", show_amplitudes=True)

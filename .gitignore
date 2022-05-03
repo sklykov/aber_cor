@@ -3,6 +3,7 @@ docs/
 documentation/
 Docs/
 SimUscope/*.tiff
+ZernikePolynomials/icons/*  # for not uploading not tested things
 
 # Driver libraries for the device (below) - not public yet
 ZernikePolynomials/ampcom/*

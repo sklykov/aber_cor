@@ -29,9 +29,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
     def __init__(self, master):
         # Values initialization
         super().__init__(master)  # initialize the main window (frame) for all widgets
-        self.plotColorbar = False
-        self.master.title("Zernike's polynomials controls and representation")
-        self.master.geometry("+3+40")  # put the main window on the (+x, +y) coordinate away from the top left monitor coordinate
+        self.plotColorbar = False; self.master.title("Zernike's polynomials controls and representation")
+        self.master.geometry("+3+40")  # put the main window on the (+x, +y) coordinate away from the top left display coord.
         self.amplitudes = [0.0, 0.0]  # default amplitudes for the 1st order
         self.orders = [(-1, 1), (1, 1)]; self.flagFlattened = False; self.changedSliders = 1
         self.amplitudes_sliders_dict = {}; self.minV = 200; self.maxV = 400
@@ -43,6 +42,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.ampcomImported = False; self.converted_voltages = []; self.volts_written = False
         self.parse_indices = []; self.offset_zernikes = np.zeros(shape=1); self.fitted_offsets = np.zeros(shape=1)
         self.corrections_loaded = False; self.flatten_field_coefficients = np.zeros(shape=1)
+        self.corrected_voltages = np.zeros(shape=1)
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
@@ -53,14 +53,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.figure = plot_figure.Figure(figsize=(4.9, 4.9))  # Default empty figure for phase profile
         self.canvas = FigureCanvasTkAgg(self.figure, master=self); self.plotWidget = self.canvas.get_tk_widget()
 
-        # !!! Below - the way of how associate tkinter buttons with the variables and their states! THEY ARE DECOUPLED!
+        # Below - the way of how associate tkinter buttons with the variables and their states! THEY ARE DECOUPLED!
         self.varPlotColorbarButton = tk.BooleanVar(); self.varPlotColorbarButton.set(False)
         self.plotColorbarButton = Checkbutton(self, text="Colorbar", command=self.colorBarPlotting,
                                               onvalue=True, offvalue=False,
                                               variable=self.varPlotColorbarButton)
         self.loadInflMatrixButton = Button(self, text="Load Infl. Matrix", command=self.load_influence_matrix)
         self.loadInflMatrixButton.state(['!disabled', 'disabled'])  # disable of ttk button
-        self.flattenButton = Button(self, text="Flatten all", command=self.flattenAll)
+        self.flattenButton = Button(self, text="Flatten all", command=self.flatten_zernike_profile)
         self.getVoltsButton = Button(self, text="Get Volts", command=self.getVolts)
         self.getVoltsButton.state(['disabled'])
 
@@ -69,7 +69,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.order_list = [item + "order" for item in self.order_n]
         self.clickable_list = tk.StringVar(); self.clickable_list.set(self.order_list[0])
         self.max_order_selector = OptionMenu(self, self.clickable_list, self.order_list[0], *self.order_list,
-                                             command=self.numberOrdersChanged)
+                                             command=self.number_orders_changed)
 
         # Specification of two case selectors: Simulation / Controlling DPP
         self.listDevices = ["Pure Simulator", "DPP + Simulator"]; self.device_selector = tk.StringVar()
@@ -77,12 +77,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.deviceSelectorButton = OptionMenu(self, self.device_selector,
                                                self.listDevices[0],
                                                *self.listDevices,
-                                               command=self.deviceSelected)
+                                               command=self.device_selection)
 
         # Max voltage control with the named label and Combobox for controlling voltage
         self.holderSelector = Frame(self); textVMaxLabel = Label(self.holderSelector, text=" Max Volts:")
         self.maxV_selector_value = tk.IntVar(); self.maxV_selector_value.set(200)  # initial voltage
-        # !!! Below - add the association of updating of integer values of Spinbox input value:
+        # Below - add the association of updating of integer values of Spinbox input value:
         self.maxV_selector_value.trace_add("write", self.maxV_changed)
         self.maxV_selector = Spinbox(self.holderSelector, from_=self.minV, to=self.maxV,
                                      increment=10, state=tk.DISABLED, width=5,
@@ -91,11 +91,6 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         # Below - additional window for holding the sliders with the amplitudes
         self.ampl_ctrls = tk.Toplevel(master=self)  # additional window, master - the main window
-        # put this additional window with some offset for the representing it next to the main
-        self.ampl_ctrls_offsets = "+672+40"; self.ampl_ctrls.geometry(self.ampl_ctrls_offsets)
-        # Seems, that command below makes accessible the button values from this window to the main
-        self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.title("Amplitude controls")
-        self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)  # !!! Associate clicking on quit button (X) with the function
 
         # Placing all created widgets in the grid layout on the main window
         pad = 2  # overall additional border distances for all widgets
@@ -110,9 +105,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.getVoltsButton.grid(row=7, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
         self.plotWidget.grid(row=1, rowspan=6, column=0, columnspan=5, padx=pad, pady=pad)
         self.grid()
+        self.master.update()  # for updating associate with master properties (geometry)
         # self.grid_propagate(False)  # Preventing of shrinking of windows to conform with all placed widgets
         # set the value for the OptionMenu and call function for construction of ctrls
-        self.clickable_list.set(self.order_list[3]); self.after(0, self.numberOrdersChanged(self.order_list[3]))
+        self.clickable_list.set(self.order_list[3]); self.after(0, self.number_orders_changed(self.order_list[3]))
+        self.master_geometry = self.master.winfo_geometry()
+        self.after_id = self.after(1000, self.always_on_top)
 
     def plot_zernikes(self):
         """
@@ -158,9 +156,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # new_pos sent by the associated button
         i = 0
         for key in self.amplitudes_sliders_dict.keys():
-            # print(self.amplitudes_sliders_dict[key].get(), end=" ")  # FOR DEBUG
             self.amplitudes[i] = self.amplitudes_sliders_dict[key].get(); i += 1
-        # print("Recorded amplitudes:", self.amplitudes)  # FOR
         if self.changedSliders > 1:  # more than one slider changed => flatten operation
             self.changedSliders -= 1
         if not self.flagFlattened:  # if no flatten flag, redraw the plot
@@ -169,7 +165,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             if self.changedSliders == 1:  # if all sliders finally zeroed, redraw the plot
                 self.flagFlattened = False; self.plot_zernikes()
 
-    def flattenAll(self):
+    def flatten_zernike_profile(self):
         """
         Make all amplitude sliders controls equal to 0.0 value.
 
@@ -184,7 +180,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 self.amplitudes_sliders_dict[key].set(0.0)
                 self.changedSliders += 1  # counting number of zeroed sliders
 
-    def numberOrdersChanged(self, selected_order: str):
+    def number_orders_changed(self, selected_order: str):
         """
         Handle the event of order specification.
 
@@ -198,26 +194,40 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        n_orders = int(selected_order[0]); pad = 1
+        n_orders = int(selected_order[0]); pad = 6
         # Refresh the TopLevel window and the associated dictionary with buttons
+        y_shift = self.master.winfo_geometry().split("+")[2]
+        x_shift = self.master.winfo_x() + self.master.winfo_width() + 2
         self.ampl_ctrls.destroy(); self.ampl_ctrls = tk.Toplevel(master=self)
         self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)
-        self.ampl_ctrls.title("Amplitude controls"); self.ampl_ctrls.geometry(self.ampl_ctrls_offsets)
+        self.ampl_ctrls.title("Amplitude controls")
+        self.ampl_ctrls.geometry(f'+{x_shift}+{y_shift}')  # shifting relative to the main window size and positions
+        self.master.lift(aboveThis=self.ampl_ctrls)  # makes the main window above the created amplitudes controls
         # Get the (m, n) values from the order specification
         self.orders = []; self.amplitudes_sliders_dict = {}; self.amplitudes = []  # refresh the associated controls
+        self.amplitudes_ctrl_boxes_dict = {}; self.amplitudes_labels_dict = {}
         for order in range(1, n_orders + 1):  # going through all specified orders
             m = -order  # azimuthal order
             n = order  # radial order
             for polynomial in range(order + 1):  # number of polynomials = order + 1
                 self.orders.append((m, n))  # store the values as tuples
                 # Below - initialization of sliders for controlling amplitudes of Zernike's polynomials
-                classical_name = get_classical_polynomial_name((m, n), short_names=True)
-                self.amplitudes_sliders_dict[(m, n)] = tk.Scale(self.ampl_ctrls, from_=-1.0, to=1.0, orient='horizontal',
+                classical_name = get_classical_polynomial_name((m, n), short_names=True)  # Like Vertical tilt
+                # label=(f"Z{(m ,n)} " + classical_name)
+                self.amplitudes_ctrl_boxes_dict[(m, n)] = Frame(self.ampl_ctrls)  # Frame to hold sliders, labels, etc.
+                self.amplitudes_labels_dict[(m, n)] = Label(self.amplitudes_ctrl_boxes_dict[(m, n)],
+                                                            text=(f"{(m ,n)} " + classical_name),
+                                                            font=("Helvetica", 9, 'bold'))
+                # Slider below - to control an amplitude of polynomial
+                self.amplitudes_sliders_dict[(m, n)] = tk.Scale(self.amplitudes_ctrl_boxes_dict[(m, n)],
+                                                                from_=-1.0, to=1.0, orient='horizontal',
                                                                 resolution=0.05, sliderlength=20,
-                                                                label=(f"Z{(m ,n)} " + classical_name),
-                                                                tickinterval=0.5, length=152,
+                                                                tickinterval=0.5, length=160,
                                                                 command=self.sliderValueChanged,
-                                                                repeatinterval=220)
+                                                                repeatinterval=220,
+                                                                font=("Helvetica", 9))
+                self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=1)
+                self.amplitudes_sliders_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1)
                 # simplest way of packing - adding buttons on top of each other
                 self.amplitudes.append(0.0)  # assign all zeros as the flat field
                 m += 2  # according to the specification
@@ -231,14 +241,13 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             for polynomial in range(order + 1):  # number of polynomials = order + 1
                 # self.amplitudes_sliders_dict[(m, n)].grid(row=(rows_offset + row_cursor), rowspan=1,
                 #                                           column=(order-1), columnspan=1)
-                self.amplitudes_sliders_dict[(m, n)].grid(row=(order-1), rowspan=1,
-                                                          column=(rows_offset + row_cursor),
-                                                          columnspan=1, padx=pad, pady=pad)
+                self.amplitudes_ctrl_boxes_dict[(m, n)].grid(row=(order-1), rowspan=1,
+                                                             column=(rows_offset + row_cursor),
+                                                             columnspan=1, padx=pad, pady=pad)
                 m += 2; row_cursor += 1
         self.plot_zernikes()  # refresh the plot, not retain any values
-        # print(self.orders)
 
-    def deviceSelected(self, new_device):
+    def device_selection(self, new_device):
         """
         Handle the UI event of selecting of device.
 
@@ -268,7 +277,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     print("Get volts module imported")
                     self.loadInflMatrixButton.state(['!disabled'])  # activate the influence matrix
                     self.maxV_selector.state(['!disabled'])
-                    self.openSerialCommunication()  # creates additional controlling window above the main one
+                    self.open_serial_cimmunication()  # creates additional controlling window above the main one
                 except ImportError:
                     print("The in-house developed controlling library not installed on this computer.\n"
                           "Get it for maintainers with instructions!")
@@ -278,7 +287,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             else:
                 self.loadInflMatrixButton.state(['!disabled'])  # activate the influence matrix
                 self.maxV_selector.state(['!disabled'])
-                self.openSerialCommunication()  # creates additional controlling window above the main one
+                self.open_serial_cimmunication()  # creates additional controlling window above the main one
         else:
             self.loadInflMatrixButton.state(['!disabled', 'disabled'])  # disable it again
             self.maxV_selector.state(['disabled'])
@@ -334,25 +343,31 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 diff_amplitudes_size += 1  # count for non-zero specified amplitudes
                 j = get_osa_standard_index(m, n)  # calculation implemented according to the Wiki
                 self.zernike_amplitudes[j] = self.amplitudes_sliders_dict[key].get()
-        # !!! Additional correction of initial deformations (aberrations)
+        # Additional correction of initial deformations (aberrations)
         if self.corrections_loaded:
             self.corrected_zernike_amplitudes = np.zeros(self.zernike_amplitudes.shape[0])
             for j in range((self.zernike_amplitudes.shape[0])):
-                self.corrected_zernike_amplitudes = self.zernike_amplitudes[j] - self.flatten_field_coefficients[j]
-        self.voltages = gv.solve_InfMat(self.influence_matrix, self.zernike_amplitudes, self.maxV_selector_value.get())
-        self.voltages = np.expand_dims(self.voltages, axis=1)  # explicit making of 2D array by adding additional axis
-        # Verification of the proper calculation
-        self.check_solution = self.influence_matrix*np.power(self.voltages, 2)
-        k = 0  # index of collected amplitudes collected from the UI
-        if diff_amplitudes_size > 0:  # only if some non-zero amplitudes specified by a user
-            self.diff_amplitudes = np.zeros(diff_amplitudes_size)
-            m = 0  # index for collecting calculated differences
-            for ampl in self.zernike_amplitudes:
-                if abs(ampl) > 1.0E-6:  # non-zero amplitude provided by the user
-                    # print("Difference between amplitude from UI and restored after calculation:",
-                    #       np.round(abs(self.check_solution[k, 0] - ampl), 2))
-                    self.diff_amplitudes[m] = np.round((self.check_solution[k, 0] - ampl), 2); m += 1
-            k += 1
+                # ??? sign - check in the legacy code
+                self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] + self.flatten_field_coefficients[j][0]
+            self.corrected_voltages = gv.solve_InfMat(self.influence_matrix, self.zernike_amplitudes,
+                                                      self.maxV_selector_value.get())
+            self.corrected_voltages = np.expand_dims(self.corrected_voltages, axis=1)
+        # Calculation of voltages without correction
+        else:
+            self.voltages = gv.solve_InfMat(self.influence_matrix, self.zernike_amplitudes, self.maxV_selector_value.get())
+            self.voltages = np.expand_dims(self.voltages, axis=1)  # explicit making of 2D array by adding additional axis
+            # Verification of the proper calculation
+            self.check_solution = self.influence_matrix*np.power(self.voltages, 2)
+            k = 0  # index of collected amplitudes collected from the UI
+            if diff_amplitudes_size > 0:  # only if some non-zero amplitudes specified by a user
+                self.diff_amplitudes = np.zeros(diff_amplitudes_size)
+                m = 0  # index for collecting calculated differences
+                for ampl in self.zernike_amplitudes:
+                    if abs(ampl) > 1.0E-6:  # non-zero amplitude provided by the user
+                        # print("Difference between amplitude from UI and restored after calculation:",
+                        #       np.round(abs(self.check_solution[k, 0] - ampl), 2))
+                        self.diff_amplitudes[m] = np.round((self.check_solution[k, 0] - ampl), 2); m += 1
+                k += 1
         self.send_voltages_button.state(['!disabled'])  # make possible to send calculated volts to a device
         self.load_zeroed_indicies_button.config(state="normal")  # make possible to apply additional conditions
 
@@ -397,6 +412,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
+        # self.ampl_ctrls.withdraw()  # delete window from a screen
         pass
 
     def destroy_serial_ctrl_window(self):
@@ -414,6 +430,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             if self.ampcomImported:
                 try:
                     ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.25)
+                    print("The device should be zeroed due to ctrl window closing")
                 except NameError:
                     print("The device not zeroed")
                 finally:
@@ -427,7 +444,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.deviceHandle = None
             self.device_selector.set(self.listDevices[0])
 
-    def openSerialCommunication(self):
+    def open_serial_cimmunication(self):
         """
         Open the window with serial communication with device controls.
 
@@ -441,7 +458,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.serial_comm_ctrl = tk.Toplevel(master=self)  # additional window, master - the main window
         self.serial_comm_ctrl_offsets = "+2+765"; self.serial_comm_ctrl.wm_transient(self)
         self.serial_comm_ctrl.geometry(self.serial_comm_ctrl_offsets)
-        # !!! Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
+        # Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
         self.serial_comm_ctrl.protocol("WM_DELETE_WINDOW", self.destroy_serial_ctrl_window)
         # Listing of all available COM ports
         self.ports = []
@@ -465,6 +482,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.zero_amplitudes_button = Button(self.serial_comm_ctrl, text="Zero outputs", command=self.zero_amplitudes)
             self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map", command=self.load_zeroed_indices)
             self.load_flat_field_button = Button(self.serial_comm_ctrl, text="Load Flattening", command=self.load_flat_field)
+            self.visualize_correction_button = Button(self.serial_comm_ctrl, text="Visualize Correction",
+                                                      command=self.visualize_correction)
+            self.visualize_correction_button.config(state='disabled')
 
             # Placing buttons on the window
             self.port_selector.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
@@ -474,6 +494,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.zero_amplitudes_button.grid(row=1, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
             self.load_zeroed_indicies_button.grid(row=1, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
             self.load_flat_field_button.grid(row=1, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+            self.visualize_correction_button.grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
             self.serial_comm_ctrl.grid()
 
             # Disabling the buttons before some conditions fulfilled
@@ -535,7 +556,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             print("*****Pending received messages from device:*****")
             print(self.deviceHandle.read(self.deviceHandle.in_waiting).decode("utf-8"))
         # Some hard-coded command upon which the preconfigured device should report the status
-        self.deviceHandle.write(b'?'); time.sleep(0.1)  # magic number (bad) suspend to receive full response
+        self.deviceHandle.write(b'?'); time.sleep(0.1)  # magic number (bad practice) suspend to receive full response
         self.report = self.deviceHandle.read(self.deviceHandle.in_waiting).decode("utf-8")
         if len(self.report) > 0:
             print("*************Device reports:*************")
@@ -555,15 +576,16 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             VMAX = self.maxV_selector_value.get()
             if self.deviceHandle is not None:  # calculate the proper values to send
                 if self.volts_written:
-                    ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)
+                    ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)  # bad practice
                     self.get_device_status()  # for debugging
-                if len(self.parse_indices) > 0:
-                    self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indices)
-                    print("Volts Written? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
-                    time.sleep(0.25)  # magic number (bad) suspend to receive full response
-                    self.get_device_status()  # for debugging
-                    print("Device updated?", ampcom_pt.AmpCom.AmpUpdate(self.deviceHandle))
-                    self.volts_written = True  # flag tracing that some voltages written into the device
+                if len(self.parse_indices) > 0:  # checking the loaded ignored pins
+                    if not self.corrections_loaded:  # use only primarly calculated voltages, without corrections
+                        self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indices)
+                        print("Volts Written? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
+                        time.sleep(0.25)  # magic number (bad practice) suspend to receive full response
+                        self.get_device_status()  # for debugging
+                        print("Device updated?", ampcom_pt.AmpCom.AmpUpdate(self.deviceHandle))
+                        self.volts_written = True  # flag tracing that some voltages written into the device
                 else:
                     print("No voltages sent to a device, the ignored indices should be provided, use Load Map")
 
@@ -611,7 +633,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        path_fitted_offses = tk.filedialog.askopenfilename(filetypes=[("Matlab files", "*.mat")], title="Open fitted offsets")
+        path_fitted_offses = tk.filedialog.askopenfilename(filetypes=[("Matlab files", "*.mat")],
+                                                           title="Open fitted offsets")
         if path_fitted_offses is not None and len(path_fitted_offses) > 0:
             try:
                 self.fitted_offsets = loadmat(path_fitted_offses)['Zerns']  # scipy.io.loadmat, specific key for dict
@@ -630,14 +653,43 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     if isinstance(self.offset_zernikes, np.ndarray):
                         print("Offsets for Zernike amplitudes loaded")
                         # ??? Below - check the compliance with the legacy code
-                        self.flatten_field_coefficients = -self.fitted_offsets + self.offset_zernikes
-                        self.corrections_loaded = True
+                        self.flatten_field_coefficients = self.fitted_offsets - self.offset_zernikes
+                        self.flatten_field_coefficients = np.round(self.flatten_field_coefficients, 3)
+                        self.corrections_loaded = True; self.visualize_correction_button.config(state='normal')
                 else:
                     # Disabling now the flattening field coefficients only by not loading any file
                     self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(size=1)
         else:
             # Disabling now the flattening field coefficients only by not loading any file
             self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(size=1)
+
+    def visualize_correction(self):
+        """
+        Visualize loaded corrections for Zernike amplitudes for making flatten aberrations field.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.corrections_loaded:
+            for key in self.amplitudes_sliders_dict.keys():  # loop through all UI ctrls
+                (m, n) = key; j = get_osa_standard_index(m, n)  # calculation of polynomial index
+                if self.flatten_field_coefficients[j][0] > 1E-3:  # depends of precision of amplitude controls
+                    self.amplitudes_sliders_dict[key].set(self.flatten_field_coefficients[j][0])
+
+    def always_on_top(self):
+        """
+        Make always the main controlling window on top of amplitudes controls, if the main window shifted.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.master_geometry != self.master.winfo_geometry():  # the main window shifted
+            self.master.lift(aboveThis=self.ampl_ctrls)  # makes the main window on top of amplitudes ctrls window
+        self.after_id = self.after(1000, self.always_on_top)
 
     def destroy(self):
         """
@@ -648,10 +700,13 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
+        self.after_cancel(self.after_id)  # prevent of attempt to run task in background (access to master geometry)
+        time.sleep(0.1)
         if self.deviceHandle is not None:  # close connection to a device
             if self.ampcomImported:
                 try:
                     ampcom_pt.AmpCom.AmpZero(self.deviceHandle)
+                    print("The device should be zeroed due to the program closing")
                 except NameError:
                     print("The device not zeroed")
                 finally:
