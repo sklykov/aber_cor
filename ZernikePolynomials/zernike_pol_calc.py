@@ -209,7 +209,7 @@ def plot_zps_polar(orders: list, step_r: float = 0.005, step_theta: float = 0.5,
 def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: float = 0.01,
                        step_theta: float = 1.0, show_amplitudes: bool = False):
     """
-    Plot Zernike's polynomials sum ("zps") in polar projection for the unit radius circle on the provided matplotlib.figure instance.
+    Plot Zernike's polynomials sum ("zps") in polar projection for the unit radius circle on the input matplotlib.figure instance.
 
     Parameters
     ----------
