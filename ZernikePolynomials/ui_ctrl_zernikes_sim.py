@@ -31,7 +31,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
     def __init__(self, master):
         # Values initialization
         super().__init__(master)  # initialize the main window (frame) for all widgets
-        self.plotColorbar = False; self.master.title("Zernike's polynomials controls and representation")
+        self.plotColorbar = False; self.master.title("Zernike polynomials controls and representation")
         self.master.geometry("+3+40")  # put the main window on the (+x, +y) coordinate away from the top left display coord.
         self.amplitudes = [0.0, 0.0]  # default amplitudes for the 1st order
         self.orders = [(-1, 1), (1, 1)]; self.flagFlattened = False; self.changedSliders = 1
@@ -45,13 +45,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.parse_indices = []; self.offset_zernikes = np.zeros(shape=1); self.fitted_offsets = np.zeros(shape=1)
         self.corrections_loaded = False; self.flatten_field_coefficients = np.zeros(shape=1)
         self.corrected_voltages = np.zeros(shape=1); self.increased_font_size = False
+        self.sliders_shown = True  # flag for the controlling of controls representation
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
         self.diff_amplitudes = np.empty(1); self.influence_matrix = np.empty(1)
         # Widgets creation and specification (almost all - buttons)
         self.refreshPlotButton = Button(self, text="Refresh Plot", command=self.plot_zernikes)
-        self.zernikesLabel = Label(self, text=" Zernike polynoms ctrls up to:")
+        self.zernikesLabel = Label(self, text=" Polynomials ctrls up to:")
         self.figure = plot_figure.Figure(figsize=(4.9, 4.9))  # Default empty figure for phase profile
         self.canvas = FigureCanvasTkAgg(self.figure, master=self); self.plotWidget = self.canvas.get_tk_widget()
 
@@ -115,8 +116,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # ??? because now my screen resolution is set to 125%, changing fonts are not practical
         # print("Default font: ", self.default_font.actual())
 
-        # set the value for the OptionMenu and call function for construction of ctrls
-        self.clickable_list.set(self.order_list[0]); self.after(0, self.number_orders_changed(self.order_list[0]))
+        # set default numbers of Zernike polynomials sliders controls
+        self.clickable_list.set(self.order_list[3]); self.after(0, self.number_orders_changed(self.order_list[3]))
         self.master_geometry = self.master.winfo_geometry()  # saves the main window geometry
         self.after_id = self.after(1000, self.always_on_top)  # launch the function bringing the main window always on top
 
@@ -227,7 +228,6 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 self.orders.append((m, n))  # store the values as tuples
                 # Below - initialization of sliders for controlling amplitudes of Zernike's polynomials
                 classical_name = get_classical_polynomial_name((m, n), short_names=True)  # Like Vertical tilt
-                # label=(f"Z{(m ,n)} " + classical_name)
                 self.amplitudes_ctrl_boxes_dict[(m, n)] = Frame(self.ampl_ctrls)  # Frame to hold sliders, labels, etc.
                 self.amplitudes_labels_dict[(m, n)] = Label(self.amplitudes_ctrl_boxes_dict[(m, n)],
                                                             text=(f"{(m ,n)} " + classical_name),
@@ -240,56 +240,82 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                                                                 resolution=0.02, sliderlength=16,
                                                                 tickinterval=0.5, length=156,
                                                                 command=self.sliderValueChanged,
-                                                                repeatinterval=220)
+                                                                repeatinterval=200)
                 self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=1)
                 self.amplitudes_sliders_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1)
-                # simplest way of packing - adding buttons on top of each other
-                self.amplitudes.append(0.0)  # assign all zeros as the flat field
-                m += 2  # according to the specification
+                self.amplitudes.append(0.0)  # assign all zeros as the flat field, reinitilized each time!
+                m += 2  # according to the specification of Zernike polynomial
         self.amplitudes_sliders_dict[(1, 1)].update()  # for updating internal geometry properties
         self.amplitudes_labels_dict[(1, 1)].update()   # for updating internal geometry properties
-        # Defying the sizes for placement of widgets
+        # Defining the sizes for placement of widgets
         width = int(self.amplitudes_sliders_dict[(1, 1)].winfo_geometry().split("x")[0])
         height = (int(self.amplitudes_sliders_dict[(1, 1)].winfo_geometry().split("x")[1].split("+")[0])
                   + int(self.amplitudes_labels_dict[(1, 1)].winfo_geometry().split("x")[1].split("+")[0]))
-        # Placing the sliders on the window
+        self.slider_intbox_selector = Button(self.ampl_ctrls, text="Sliders", command=self.select_ampl_ctrls)
+        # Placing the sliders on the window in pyramidal fashion
         y_coordinate = pad  # initial horizontal shift
-        if n_orders <= 6:
-            for order in range(1, n_orders + 1):
-                m = -order  # azimuthal order
-                n = order  # radial order
-                x_coordinate = pad + ((n_orders-order)*width)//2  # making pyramid on horizontal placing
-                for polynomial in range(order + 1):  # number of polynomials = order + 1
-                    # self.amplitudes_ctrl_boxes_dict[(m, n)].grid(row=(order-1), rowspan=1, column=row_cursor,
-                    #                                              columnspan=1, padx=pad, pady=pad)
-                    self.amplitudes_ctrl_boxes_dict[(m, n)].place(x=x_coordinate, y=y_coordinate)
-                    m += 2
-                    x_coordinate += width + pad  # adding pad and width of a widget to place next one
-                y_coordinate += height + pad  # adding pad and width of a widget to place next row with
-        # 7th order layout differently
-        # FIXME - make better layout
+        if n_orders <= 6:  # seems that up to 6 order, all sliders could be placed inside the window next to a main
+            n_max = n_orders  # controls pyramidal placing below
         else:
-            for order in range(1, 7):
-                m = -order  # azimuthal order
-                n = order  # radial order
-                x_coordinate = pad + ((n_orders-1-order)*width)//2  # making pyramid on horizontal placing
-                for polynomial in range(order + 1):  # number of polynomials = order + 1
-                    self.amplitudes_ctrl_boxes_dict[(m, n)].place(x=x_coordinate, y=y_coordinate)
-                    m += 2
-                    x_coordinate += width + pad  # adding pad and width of a widget to place next one
-                    if order == 6:
-                        print(x_coordinate, y_coordinate)
-                y_coordinate += height + pad  # adding pad and width of a widget to place next row with widgets
-            y_coordinate += pad
-            m = -7; n = 7; x_coordinate2 = pad
+            n_max = 6  # pyramid only up to 6th order
+        for order in range(1, n_max + 1):
+            m = -order  # azimuthal order
+            n = order  # radial order
+            x_coordinate = pad + ((n_orders-order)*width)//2  # making pyramid on horizontal placing
+            for polynomial in range(order + 1):  # number of polynomials = order + 1
+                # self.amplitudes_ctrl_boxes_dict[(m, n)].grid(row=(order-1), rowspan=1, column=row_cursor,
+                #                                              columnspan=1, padx=pad, pady=pad)
+                self.amplitudes_ctrl_boxes_dict[(m, n)].place(x=x_coordinate, y=y_coordinate)
+                m += 2
+                x_coordinate += width + pad  # adding pad and width of a widget to place next one
+            if order == 1:
+                if n_orders >= 3:
+                    x_coordinate += 2*pad + n_orders*pad + (n_orders-2)*(width//4)
+                else:
+                    x_coordinate += 2*pad + n_orders*pad
+                self.slider_intbox_selector.place(x=x_coordinate, y=(y_coordinate + (height//4)))
+                self.slider_intbox_selector.update()  # for updating geometry property of a button
+                width_sel = int(self.slider_intbox_selector.winfo_geometry().split("x")[0])
+            y_coordinate += height + pad  # adding pad and width of a widget to place next row with
+        # 7th order layout differently and manually, it's expected to control not more than 7 orders
+        if n_orders == 7:
+            m = -7; n = 7; x_coordinate2 = (1/3)*width
+            # placing 5 polynomial out of 8
+            for polynomial in range(5):  # number of polynomials = order + 1
+                self.amplitudes_ctrl_boxes_dict[(m, n)].place(x=x_coordinate2, y=y_coordinate)
+                m += 2
+                x_coordinate2 += (4/3)*width + pad  # adding pad and width of a widget to place next one
+            # placing remaining 7th order polynomials
+            y_coordinate += height + pad; x_coordinate2 = width + pad
             for polynomial in range(3):  # number of polynomials = order + 1
                 self.amplitudes_ctrl_boxes_dict[(m, n)].place(x=x_coordinate2, y=y_coordinate)
-                print(x_coordinate2, y_coordinate)
                 m += 2
                 x_coordinate2 += 2*width + pad  # adding pad and width of a widget to place next one
             y_coordinate += height + pad
+        # Below - setting the geometry setting for Toplevel window and command to refresh profile
+        # Also, correcting amplitudes controlling window with sliders for adding the button
+        if n_orders == 1:
+            x_coordinate += width_sel + 2*pad
+        elif n_orders == 2:
+            x_coordinate += abs(width//2 - width_sel) + 4*pad
         self.ampl_ctrls.geometry(f'{x_coordinate}x{y_coordinate}'); self.ampl_ctrls.update()
         self.plot_zernikes()  # refresh the plot, not retain any values
+
+    def select_ampl_ctrls(self):
+        """
+        Make different controls representation for Zernike polynomials amplitudes.
+
+        Returns
+        -------
+        None.
+
+        """
+        # TODO: implement other way of controls
+        if self.sliders_shown:
+            # Destroy sliders controls
+            for key, slider_frame in self.amplitudes_sliders_dict.items():
+                slider_frame.destroy()
+        self.sliders_shown = not self.sliders_shown
 
     def device_selection(self, new_device):
         """
@@ -324,7 +350,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     self.open_serial_cimmunication()  # creates additional controlling window above the main one
                 except ImportError:
                     print("The in-house developed controlling library not installed on this computer.\n"
-                          "Get it for maintainers with instructions!")
+                          "Get it from the maintainers with instructions!")
                     print("The selection of device will go again to the Pure Simulated")
                     self.device_selector.set(self.listDevices[0])
                 self.librariesImported = True
@@ -392,7 +418,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.corrected_zernike_amplitudes = np.zeros(self.zernike_amplitudes.shape[0])
             for j in range((self.zernike_amplitudes.shape[0])):
                 # ??? sign - check in the legacy code
-                self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] + self.flatten_field_coefficients[j][0]
+                self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] - self.flatten_field_coefficients[j][0]
             self.corrected_voltages = gv.solve_InfMat(self.influence_matrix, self.zernike_amplitudes,
                                                       self.maxV_selector_value.get())
             self.corrected_voltages = np.expand_dims(self.corrected_voltages, axis=1)
@@ -524,8 +550,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.connection_label = Label(self.serial_comm_ctrl, textvariable=self.connection_status, foreground='red')
             self.get_device_status_button = Button(self.serial_comm_ctrl, text="Get status", command=self.get_device_status)
             self.zero_amplitudes_button = Button(self.serial_comm_ctrl, text="Zero outputs", command=self.zero_amplitudes)
-            self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map", command=self.load_zeroed_indices)
-            self.load_flat_field_button = Button(self.serial_comm_ctrl, text="Load Flattening", command=self.load_flat_field)
+            self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map",
+                                                      command=self.load_zeroed_indices)
+            self.load_flat_field_button = Button(self.serial_comm_ctrl, text="Load Flattening",
+                                                 command=self.load_flat_field)
             self.visualize_correction_button = Button(self.serial_comm_ctrl, text="Visualize Correction",
                                                       command=self.visualize_correction)
             self.visualize_correction_button.config(state='disabled')
@@ -745,7 +773,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         if not self.increased_font_size:
-            self.default_font.config(size=11)  # FIXME: actually, not enough for proper scaling of all widgets
+            self.default_font.config(size=11)  # TODO: actually, not enough for proper scaling of all widgets
             self.increased_font_size = True
         else:
             self.default_font.config(size=9)
