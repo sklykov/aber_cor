@@ -859,7 +859,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.reconstruction_window.destroy(); self.reconstruction_window = None
 
     # %% Camera control for making snapshots
-    # snapshots of recorded wavefront profiles from a Shack-Hartmann sensor
+    # recorded wavefront profiles from a Shack-Hartmann sensor
     def start_live_stream(self):
         """
         Open the additional window for controlling a camera.

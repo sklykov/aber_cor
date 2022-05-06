@@ -15,8 +15,10 @@ import matplotlib.figure as plot_figure
 import time
 import numpy as np
 from scipy.io import loadmat
-import ctypes  # for fixing of blurred text if lauched by pure Python
+import ctypes  # for fixing of blurred text if launched by pure Python
 import platform
+import os
+import skimage.io
 
 
 # %% GUI class
@@ -46,6 +48,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.corrections_loaded = False; self.flatten_field_coefficients = np.zeros(shape=1)
         self.corrected_voltages = np.zeros(shape=1); self.increased_font_size = False
         self.sliders_shown = True  # flag for the controlling of controls representation
+        tk.ttk.Style().theme_use('default')  # also can be: classic, alt, clam
+        self.amplitudes_doubleVars_dict = {}; self.amplitudes_inputs_dict = {}
+        self.icons_dict = {}; self.canvas_dict = {}; self.plotWidgets_dict = {}
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
@@ -53,7 +58,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Widgets creation and specification (almost all - buttons)
         self.refreshPlotButton = Button(self, text="Refresh Plot", command=self.plot_zernikes)
         self.zernikesLabel = Label(self, text=" Polynomials ctrls up to:")
-        self.figure = plot_figure.Figure(figsize=(4.9, 4.9))  # Default empty figure for phase profile
+        self.figure = plot_figure.Figure(figsize=(5, 5))  # Default empty figure for phase profile
         self.canvas = FigureCanvasTkAgg(self.figure, master=self); self.plotWidget = self.canvas.get_tk_widget()
 
         # Below - the way of how associate tkinter buttons with the variables and their states! THEY ARE DECOUPLED!
@@ -84,12 +89,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                                                command=self.device_selection)
 
         # Max voltage control with the named label and Combobox for controlling voltage
-        self.holderSelector = Frame(self); textVMaxLabel = Label(self.holderSelector, text=" Max Volts:")
+        self.holderSelector = Frame(self); textVMaxLabel = Label(self.holderSelector, text="Max Volts: ")
         self.maxV_selector_value = tk.IntVar(); self.maxV_selector_value.set(200)  # initial voltage
         # Below - add the association of updating of integer values of Spinbox input value:
         self.maxV_selector_value.trace_add("write", self.maxV_changed)
         self.maxV_selector = Spinbox(self.holderSelector, from_=self.minV, to=self.maxV,
-                                     increment=10, state=tk.DISABLED, width=5,
+                                     increment=10, state=tk.DISABLED, width=4,
                                      exportselection=True, textvariable=self.maxV_selector_value)
         textVMaxLabel.pack(side=tk.LEFT); self.maxV_selector.pack(side=tk.LEFT)
 
@@ -97,18 +102,19 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.ampl_ctrls = tk.Toplevel(master=self)  # additional window, master - the main window
 
         # Placing all created widgets in the grid layout on the main window
-        pad = 2  # overall additional border distances for all widgets
-        self.zernikesLabel.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
-        self.max_order_selector.grid(row=0, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
-        self.refreshPlotButton.grid(row=0, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
-        self.plotColorbarButton.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
-        self.flattenButton.grid(row=0, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
-        self.deviceSelectorButton.grid(row=7, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
-        self.loadInflMatrixButton.grid(row=7, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
-        self.holderSelector.grid(row=7, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
-        self.getVoltsButton.grid(row=7, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
-        self.plotWidget.grid(row=1, rowspan=6, column=0, columnspan=5, padx=pad, pady=pad)
-        self.increase_font_size_button.grid(row=7, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
+        padx = 3; pady = 6  # overall additional border distances for all widgets
+        self.pady = pady; self.padx = padx
+        self.zernikesLabel.grid(row=0, rowspan=1, column=0, columnspan=1, padx=padx, pady=pady)
+        self.max_order_selector.grid(row=0, rowspan=1, column=1, columnspan=1, padx=padx, pady=pady)
+        self.refreshPlotButton.grid(row=0, rowspan=1, column=2, columnspan=1, padx=padx, pady=pady)
+        self.plotColorbarButton.grid(row=0, rowspan=1, column=3, columnspan=1, padx=padx, pady=pady)
+        self.flattenButton.grid(row=0, rowspan=1, column=4, columnspan=1, padx=padx, pady=pady)
+        self.deviceSelectorButton.grid(row=7, rowspan=1, column=0, columnspan=1, padx=padx, pady=pady)
+        self.loadInflMatrixButton.grid(row=7, rowspan=1, column=1, columnspan=1, padx=padx, pady=pady)
+        self.holderSelector.grid(row=7, rowspan=1, column=2, columnspan=1, padx=padx, pady=pady)
+        self.getVoltsButton.grid(row=7, rowspan=1, column=3, columnspan=1, padx=padx, pady=pady)
+        self.plotWidget.grid(row=1, rowspan=6, column=0, columnspan=5, padx=padx, pady=pady)
+        self.increase_font_size_button.grid(row=7, rowspan=1, column=4, columnspan=1, padx=padx, pady=pady)
         self.grid(); self.master.update()  # for updating associate with master properties (geometry)
 
         # Issue with font for buttons and menu entries
@@ -126,6 +132,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if platform.system() == "Windows":
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
 
+    # %% Sum of polynomials control
     def plot_zernikes(self):
         """
         Plot the sum of specified Zernike's polynomials amplitudes.
@@ -169,11 +176,11 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         """
         # new_pos sent by the associated button
         i = 0
-        for key in self.amplitudes_sliders_dict.keys():
+        for key in self.amplitudes_sliders_dict.keys():  # storing the amplitudes in the list
             self.amplitudes[i] = self.amplitudes_sliders_dict[key].get(); i += 1
-        if self.changedSliders > 1:  # more than one slider changed => flatten operation
+        if self.changedSliders > 1:  # flatten operation (counting down sliders, redraw only once)
             self.changedSliders -= 1
-        if not self.flagFlattened:  # if no flatten flag, redraw the plot
+        if not self.flagFlattened:  # if no flatten flag, redraw the plot (1 slider only changed)
             self.plot_zernikes()
         else:
             if self.changedSliders == 1:  # if all sliders finally zeroed, redraw the plot
@@ -189,10 +196,15 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         self.flagFlattened = True  # flag for preventing the redrawing
-        for key in self.amplitudes_sliders_dict.keys():
-            if abs(self.amplitudes_sliders_dict[key].get()) > 0.0001:  # if not actually equal to zero
-                self.amplitudes_sliders_dict[key].set(0.0)
-                self.changedSliders += 1  # counting number of zeroed sliders
+        if self.sliders_shown:
+            for key in self.amplitudes_sliders_dict.keys():
+                if abs(self.amplitudes_sliders_dict[key].get()) > 0.0001:  # if not actually equal to zero
+                    self.amplitudes_sliders_dict[key].set(0.0)
+                    self.changedSliders += 1  # counting number of zeroed sliders for preventing multiple redrawing
+        else:
+            for key in self.amplitudes_doubleVars_dict.keys():
+                if abs(self.amplitudes_doubleVars_dict[key].get()) > 0.0001:  # if not actually equal to zero
+                    self.amplitudes_doubleVars_dict[key].set(0.0)
 
     def number_orders_changed(self, selected_order: str):
         """
@@ -210,8 +222,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         """
         n_orders = int(selected_order[0]); pad = 5
         # Refresh the TopLevel window and the associated dictionary with buttons
-        y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window horizontally
-        x_shift = self.master.winfo_x() + self.master.winfo_width() + 2  # shift of Toplevel window vertically
+        y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window vertically
+        x_shift = self.master.winfo_x() + self.master.winfo_width() + 3*self.padx  # shift of Toplevel window horizontally
         self.ampl_ctrls.destroy(); self.ampl_ctrls = tk.Toplevel(master=self)
         self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)
         self.ampl_ctrls.title("Amplitude controls")
@@ -220,38 +232,33 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Get the (m, n) values from the order specification
         self.orders = []; self.amplitudes_sliders_dict = {}; self.amplitudes = []  # refresh the associated controls
         self.amplitudes_ctrl_boxes_dict = {}; self.amplitudes_labels_dict = {}
-        # Construction of sliders
+        # Construction of amplitude controls
         for order in range(1, n_orders + 1):  # going through all specified orders
             m = -order  # azimuthal order
             n = order  # radial order
             for polynomial in range(order + 1):  # number of polynomials = order + 1
                 self.orders.append((m, n))  # store the values as tuples
-                # Below - initialization of sliders for controlling amplitudes of Zernike's polynomials
+                # Below - initialization of frames for composing controls of polynomials amplitudes
                 classical_name = get_classical_polynomial_name((m, n), short_names=True)  # Like Vertical tilt
                 self.amplitudes_ctrl_boxes_dict[(m, n)] = Frame(self.ampl_ctrls)  # Frame to hold sliders, labels, etc.
                 self.amplitudes_labels_dict[(m, n)] = Label(self.amplitudes_ctrl_boxes_dict[(m, n)],
                                                             text=(f"{(m ,n)} " + classical_name),
                                                             font=(self.default_font.actual()['family'],
-                                                                  self.default_font.actual()['size'],
-                                                                  'bold'))
+                                                                  self.default_font.actual()['size'], 'bold'))
                 # Slider below - to control an amplitude of polynomial
-                self.amplitudes_sliders_dict[(m, n)] = tk.Scale(self.amplitudes_ctrl_boxes_dict[(m, n)],
-                                                                from_=-1.0, to=1.0, orient='horizontal',
-                                                                resolution=0.02, sliderlength=16,
-                                                                tickinterval=0.5, length=156,
-                                                                command=self.sliderValueChanged,
-                                                                repeatinterval=200)
                 self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=1)
-                self.amplitudes_sliders_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1)
-                self.amplitudes.append(0.0)  # assign all zeros as the flat field, reinitilized each time!
+                self.amplitudes.append(0.0)  # assign all zeros as the flat field, reinitialized each time!
                 m += 2  # according to the specification of Zernike polynomial
+        self.create_sliders()  # creation of sliders moved to the function
         self.amplitudes_sliders_dict[(1, 1)].update()  # for updating internal geometry properties
         self.amplitudes_labels_dict[(1, 1)].update()   # for updating internal geometry properties
         # Defining the sizes for placement of widgets
         width = int(self.amplitudes_sliders_dict[(1, 1)].winfo_geometry().split("x")[0])
         height = (int(self.amplitudes_sliders_dict[(1, 1)].winfo_geometry().split("x")[1].split("+")[0])
                   + int(self.amplitudes_labels_dict[(1, 1)].winfo_geometry().split("x")[1].split("+")[0]))
-        self.slider_intbox_selector = Button(self.ampl_ctrls, text="Sliders", command=self.select_ampl_ctrls)
+        self.slider_intbox_selector = tk.Button(self.ampl_ctrls, text="Active: Sliders", command=self.select_ampl_ctrls,
+                                                fg='green', font=(self.default_font.actual()['family'],
+                                                                  self.default_font.actual()['size'], 'bold'))
         # Placing the sliders on the window in pyramidal fashion
         y_coordinate = pad  # initial horizontal shift
         if n_orders <= 6:  # seems that up to 6 order, all sliders could be placed inside the window next to a main
@@ -261,7 +268,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         for order in range(1, n_max + 1):
             m = -order  # azimuthal order
             n = order  # radial order
-            x_coordinate = pad + ((n_orders-order)*width)//2  # making pyramid on horizontal placing
+            x_coordinate = pad + ((n_max-order)*width)//2  # making pyramid on horizontal placing
             for polynomial in range(order + 1):  # number of polynomials = order + 1
                 # self.amplitudes_ctrl_boxes_dict[(m, n)].grid(row=(order-1), rowspan=1, column=row_cursor,
                 #                                              columnspan=1, padx=pad, pady=pad)
@@ -270,9 +277,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 x_coordinate += width + pad  # adding pad and width of a widget to place next one
             if order == 1:
                 if n_orders >= 3:
-                    x_coordinate += 2*pad + n_orders*pad + (n_orders-2)*(width//4)
+                    x_coordinate += n_orders*pad + (n_orders-2)*(width//4)
                 else:
-                    x_coordinate += 2*pad + n_orders*pad
+                    x_coordinate += pad + n_orders*pad
                 self.slider_intbox_selector.place(x=x_coordinate, y=(y_coordinate + (height//4)))
                 self.slider_intbox_selector.update()  # for updating geometry property of a button
                 width_sel = int(self.slider_intbox_selector.winfo_geometry().split("x")[0])
@@ -310,13 +317,152 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        # TODO: implement other way of controls
         if self.sliders_shown:
             # Destroy sliders controls
+            self.max_order_selector.config(state="disabled")  # disabling refreshing of # of orders
             for key, slider_frame in self.amplitudes_sliders_dict.items():
                 slider_frame.destroy()
+            self.slider_intbox_selector.config(text="Active: Inputs")
+            self.create_amplitudes_inputs()  # Create input controls
+        else:
+            # Restore sliders controls
+            self.max_order_selector.config(state="normal")
+            # Destroy associated with input boxes controllers
+            for key, input_frame in self.amplitudes_inputs_dict.items():
+                input_frame.destroy()
+            for key, icon in self.plotWidgets_dict.items():
+                icon.destroy()
+            # Recreate sliders and restore saved amplitde values
+            self.create_sliders()
+            i = 0
+            for key in self.amplitudes_sliders_dict.keys():  # set previously selected amplitudes
+                self.amplitudes_sliders_dict[key].set(self.amplitudes[i]); i += 1
+            self.slider_intbox_selector.config(text="Active: Sliders")
         self.sliders_shown = not self.sliders_shown
 
+    def create_amplitudes_inputs(self):
+        """
+        Create Spinboxes for manual controls of amplitudes.
+
+        Returns
+        -------
+        None.
+
+        """
+        n_orders = int(self.clickable_list.get()[0])
+        i = 0  # counter for saved list of amplitudes
+        for order in range(1, n_orders + 1):  # going through all specified orders
+            m = -order  # azimuthal order
+            n = order  # radial order
+            for polynomial in range(order + 1):  # number of polynomials = order + 1
+                # Slider below - to control an amplitude of polynomial
+                self.amplitudes_doubleVars_dict[(m, n)] = tk.DoubleVar()
+                self.amplitudes_doubleVars_dict[(m, n)].set(self.amplitudes[i]); i += 1
+                self.amplitudes_doubleVars_dict[(m, n)].trace_add("write", self.amplitude_input_changed)
+                self.amplitudes_inputs_dict[(m, n)] = Spinbox(self.amplitudes_ctrl_boxes_dict[(m, n)],
+                                                              from_=-1.0, to=1.0, increment=0.01, width=4,
+                                                              exportselection=True,
+                                                              textvariable=self.amplitudes_doubleVars_dict[(m, n)])
+                pad = 2
+                self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=2, padx=pad, pady=pad)
+                self.amplitudes_inputs_dict[(m, n)].grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
+                self.icons_dict[(m, n)] = plot_figure.Figure(figsize=(0.5, 0.5))
+                self.canvas_dict[(m, n)] = FigureCanvasTkAgg(self.icons_dict[(m, n)],
+                                                             master=self.amplitudes_ctrl_boxes_dict[(m, n)])
+                self.plotWidgets_dict[(m, n)] = self.canvas_dict[(m, n)].get_tk_widget()
+                self.plotWidgets_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+                m += 2  # according to the specification of Zernike polynomial
+            self.load_icons()  # loading profiles of aberrations
+
+    def load_icons(self):
+        """
+        Load icons for aberrations if presented in the folder "icons", stored in the project folder.
+
+        Returns
+        -------
+        None.
+
+        """
+        for key in self.icons_dict.keys():
+            name_file = str(key) + ".jpeg"
+            current_path = os.path.dirname(__file__)
+            icons_folder_path = os.path.join(current_path, "icons")
+            current_icon_path = os.path.join(icons_folder_path, name_file)
+            if os.path.isfile(current_icon_path):
+                img = skimage.io.imread(current_icon_path)
+                axes = self.icons_dict[key].add_axes(rect=[0.0, 0.0, 1.0, 1.0])  # full size figure adding
+                axes.imshow(img); axes.axis('off')  # laoding the image on the figure.axes
+                self.canvas_dict[key].draw()  # refreshing GUI
+
+    def amplitude_input_changed(self, *args):
+        """
+        Call after some delay in ms function to validate user input.
+
+        Parameters
+        ----------
+        *args : list.
+            Provided by tkinter.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.after(1000, self.validate_input_changed)
+
+    def validate_input_changed(self):
+        """
+        Validate user input into amplitudes controls.
+
+        Returns
+        -------
+        None.
+
+        """
+        i = 0  # count amplitudes in amplitudes list
+        redraw_profile = False  # controlling flag
+        for key in self.amplitudes_doubleVars_dict.keys():
+            try:
+                d_var = self.amplitudes_doubleVars_dict[key].get()
+                if d_var < -1.0 or d_var > 1.0:
+                    self.amplitudes_doubleVars_dict[key].set(self.amplitudes[i])  # set previous value
+                # Update stored amplitudes and call the function for redraw of polynomials sum
+                else:
+                    if d_var != self.amplitudes[i]:  # only if valid amplitude provided, draw it
+                        self.amplitudes[i] = d_var; redraw_profile = True
+            except tk.TclError:
+                self.amplitudes_doubleVars_dict[key].set(self.amplitudes[i])  # set default value
+            i += 1
+        if redraw_profile:
+            self.plot_zernikes()  # redraw once the profile
+
+    def create_sliders(self):
+        """
+        Create sliders for controlling polynomials amplitudes.
+
+        Returns
+        -------
+        None.
+
+        """
+        # Construction of sliders
+        n_orders = int(self.clickable_list.get()[0])
+        for order in range(1, n_orders + 1):  # going through all specified orders
+            m = -order  # azimuthal order
+            n = order  # radial order
+            for polynomial in range(order + 1):  # number of polynomials = order + 1
+                # Slider below - to control an amplitude of polynomial
+                self.amplitudes_sliders_dict[(m, n)] = tk.Scale(self.amplitudes_ctrl_boxes_dict[(m, n)],
+                                                                from_=-1.0, to=1.0, orient='horizontal',
+                                                                resolution=0.01, sliderlength=16,
+                                                                tickinterval=0.5, length=156,
+                                                                command=self.sliderValueChanged,
+                                                                repeatinterval=200)
+                self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=1)
+                self.amplitudes_sliders_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1)
+                m += 2  # according to the specification of Zernike polynomial
+
+    # %% Communication with device
     def device_selection(self, new_device):
         """
         Handle the UI event of selecting of device.
@@ -347,7 +493,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     print("Get volts module imported")
                     self.loadInflMatrixButton.state(['!disabled'])  # activate the influence matrix
                     self.maxV_selector.state(['!disabled'])
-                    self.open_serial_cimmunication()  # creates additional controlling window above the main one
+                    self.open_serial_communication()  # creates additional controlling window above the main one
                 except ImportError:
                     print("The in-house developed controlling library not installed on this computer.\n"
                           "Get it from the maintainers with instructions!")
@@ -357,7 +503,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             else:
                 self.loadInflMatrixButton.state(['!disabled'])  # activate the influence matrix
                 self.maxV_selector.state(['!disabled'])
-                self.open_serial_cimmunication()  # creates additional controlling window above the main one
+                self.open_serial_communication()  # creates additional controlling window above the main one
         else:
             self.loadInflMatrixButton.state(['!disabled', 'disabled'])  # disable it again
             self.maxV_selector.state(['disabled'])
@@ -439,7 +585,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                         self.diff_amplitudes[m] = np.round((self.check_solution[k, 0] - ampl), 2); m += 1
                 k += 1
         self.send_voltages_button.state(['!disabled'])  # make possible to send calculated volts to a device
-        self.load_zeroed_indicies_button.config(state="normal")  # make possible to apply additional conditions
+        self.load_zeroed_indices_button.config(state="normal")  # make possible to apply additional conditions
 
     def maxV_changed(self, *args):
         """
@@ -470,7 +616,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             val = self.maxV_selector_value.get()
             if val < self.minV or val > self.maxV:
                 self.maxV_selector_value.set(self.minV)  # assign the minimal value if provided is out of range
-        except Exception:
+        except tk.TclError:
             self.maxV_selector_value.set(self.minV)  # assign the minimal value if provided e.g. contain symbols
 
     def no_exit(self):
@@ -514,7 +660,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.deviceHandle = None
             self.device_selector.set(self.listDevices[0])
 
-    def open_serial_cimmunication(self):
+    def open_serial_communication(self):
         """
         Open the window with serial communication with device controls.
 
@@ -526,8 +672,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # All initialization steps are analogue to the specified for amplitudes controls
         # Add the additional window evoked by the button for communication with the device
         self.serial_comm_ctrl = tk.Toplevel(master=self)  # additional window, master - the main window
-        self.serial_comm_ctrl_offsets = "+2+765"; self.serial_comm_ctrl.wm_transient(self)
-        self.serial_comm_ctrl.geometry(self.serial_comm_ctrl_offsets)
+        y_shift = self.master.winfo_y() + self.master.winfo_height() + 7*self.pady  # shift of Toplevel window vertically
+        x_shift = self.master.winfo_x()  # shift of Toplevel window horizontally
+        self.serial_comm_ctrl.geometry(f'+{x_shift}+{y_shift}')
         # Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
         self.serial_comm_ctrl.protocol("WM_DELETE_WINDOW", self.destroy_serial_ctrl_window)
         # Listing of all available COM ports
@@ -550,8 +697,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.connection_label = Label(self.serial_comm_ctrl, textvariable=self.connection_status, foreground='red')
             self.get_device_status_button = Button(self.serial_comm_ctrl, text="Get status", command=self.get_device_status)
             self.zero_amplitudes_button = Button(self.serial_comm_ctrl, text="Zero outputs", command=self.zero_amplitudes)
-            self.load_zeroed_indicies_button = Button(self.serial_comm_ctrl, text="Load Map",
-                                                      command=self.load_zeroed_indices)
+            self.load_zeroed_indices_button = Button(self.serial_comm_ctrl, text="Load Map",
+                                                     command=self.load_zeroed_indices)
             self.load_flat_field_button = Button(self.serial_comm_ctrl, text="Load Flattening",
                                                  command=self.load_flat_field)
             self.visualize_correction_button = Button(self.serial_comm_ctrl, text="Visualize Correction",
@@ -564,7 +711,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.get_device_status_button.grid(row=0, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
             self.send_voltages_button.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
             self.zero_amplitudes_button.grid(row=1, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
-            self.load_zeroed_indicies_button.grid(row=1, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
+            self.load_zeroed_indices_button.grid(row=1, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
             self.load_flat_field_button.grid(row=1, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
             self.visualize_correction_button.grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
             self.serial_comm_ctrl.grid()
@@ -572,7 +719,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             # Disabling the buttons before some conditions fulfilled
             self.send_voltages_button.state(['disabled'])  # after opening the window, set to disabled, before voltages
             self.get_device_status_button.config(state="disabled"); self.zero_amplitudes_button.config(state="disabled")
-            self.load_zeroed_indicies_button.config(state="disabled")
+            self.load_zeroed_indices_button.config(state="disabled")
             self.port_selected()  # try to initialize serial connection on COM port
 
     def port_selected(self, *args):
@@ -651,7 +798,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)  # bad practice
                     self.get_device_status()  # for debugging
                 if len(self.parse_indices) > 0:  # checking the loaded ignored pins
-                    if not self.corrections_loaded:  # use only primarly calculated voltages, without corrections
+                    if not self.corrections_loaded:  # use only initially calculated voltages, without corrections
                         self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indices)
                         print("Volts Written? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
                         time.sleep(0.25)  # magic number (bad practice) suspend to receive full response
@@ -721,7 +868,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     try:
                         self.offset_zernikes = loadmat(path_offsets)['Off_Zern_Coeffs']  # scipy.io.loadmat
                     except KeyError as e:
-                        print("The precoded key " + str(e) + " is not available in opened mat file")
+                        print("The pre-coded key " + str(e) + " is not available in opened mat file")
                     if isinstance(self.offset_zernikes, np.ndarray):
                         print("Offsets for Zernike amplitudes loaded")
                         # ??? Below - check the compliance with the legacy code
@@ -747,7 +894,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if self.corrections_loaded:
             for key in self.amplitudes_sliders_dict.keys():  # loop through all UI ctrls
                 (m, n) = key; j = get_osa_standard_index(m, n)  # calculation of polynomial index
-                if self.flatten_field_coefficients[j][0] > 1E-3:  # depends of precision of amplitude controls
+                if self.flatten_field_coefficients[j][0] > 1E-3:  # depends on precision of amplitude controls
                     self.amplitudes_sliders_dict[key].set(self.flatten_field_coefficients[j][0])
 
     def always_on_top(self):
@@ -765,7 +912,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
     def increase_font_size(self):
         """
-        Fix the issue with font size in the GUI launched by the pure python interepreter.
+        Fix the issue with font size in the GUI launched by the pure python interpreter.
 
         Returns
         -------

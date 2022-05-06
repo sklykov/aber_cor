@@ -589,7 +589,7 @@ if __name__ == '__main__':
 
     # %% Plotting results over the surface
     step_r = 0.01; step_theta = 0.5  # in grads
-    orders = [(-1, 1)]  # specification of (m, n) order for polynomial plotting
+    orders = [(7, 7)]  # specification of (m, n) order for polynomial plotting
     plot_zps_polar(orders, step_r, step_theta, "")
     zernikes_set = [(-1, 1), (1, 1)]  # vertical and horizontal tilts
     # plot_zps_polar(zernikes_set, step_r, step_theta, "Sum tilts with equal amplitudes", show_amplitudes=True)
