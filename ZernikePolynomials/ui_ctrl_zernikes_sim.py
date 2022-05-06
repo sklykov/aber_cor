@@ -119,6 +119,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         # Issue with font for buttons and menu entries
         self.default_font = tk.font.nametofont("TkDefaultFont")
+        self.figure_resizer = 1.0; self.default_entry_font = tk.font.nametofont("TkTextFont")
         # ??? because now my screen resolution is set to 125%, changing fonts are not practical
         # print("Default font: ", self.default_font.actual())
 
@@ -127,12 +128,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.master_geometry = self.master.winfo_geometry()  # saves the main window geometry
         self.after_id = self.after(1000, self.always_on_top)  # launch the function bringing the main window always on top
 
-        # Below - blurred text fixing for launching this script by Python console
+        # Below - blurred text fixing for launching this script by Python console (not from IDE)
         print("Script launched on:", platform.system())
         if platform.system() == "Windows":
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
 
-    # %% Sum of polynomials control
+    # %% Sum of polynomials ctrl
     def plot_zernikes(self):
         """
         Plot the sum of specified Zernike's polynomials amplitudes.
@@ -144,7 +145,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         """
         # t1 = time.time()
         # below: update the plot
-        self.figure = get_plot_zps_polar(self.figure, orders=self.orders, step_r=0.005, step_theta=0.9,
+        self.figure = get_plot_zps_polar(self.figure, orders=self.orders, step_r=0.01, step_theta=0.8,
                                          alpha_coefficients=self.amplitudes, show_amplitudes=self.plotColorbar)
         self.canvas.draw()  # redraw the figure
         # t2 = time.time(); print("redraw time(ms):", int(np.round((t2-t1)*1000, 0)))  # for debugging
@@ -366,13 +367,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 pad = 2
                 self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=2, padx=pad, pady=pad)
                 self.amplitudes_inputs_dict[(m, n)].grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
-                self.icons_dict[(m, n)] = plot_figure.Figure(figsize=(0.5, 0.5))
+                self.icons_dict[(m, n)] = plot_figure.Figure(figsize=(0.5*self.figure_resizer,
+                                                                      0.5*self.figure_resizer))
                 self.canvas_dict[(m, n)] = FigureCanvasTkAgg(self.icons_dict[(m, n)],
                                                              master=self.amplitudes_ctrl_boxes_dict[(m, n)])
                 self.plotWidgets_dict[(m, n)] = self.canvas_dict[(m, n)].get_tk_widget()
                 self.plotWidgets_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
                 m += 2  # according to the specification of Zernike polynomial
-            self.load_icons()  # loading profiles of aberrations
+        self.load_icons()  # loading profiles of aberrations
 
     def load_icons(self):
         """
@@ -919,12 +921,25 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
+        # TODO: Check all windows layouts
         if not self.increased_font_size:
-            self.default_font.config(size=11)  # TODO: actually, not enough for proper scaling of all widgets
+            self.default_font.config(size=11)  # makes the main text font size 11
+            self.default_entry_font.config(size=11)  # makes the text in entires font size 11
+            self.figure_resizer = 1.2
+            # Resize main ctrl figure for sum of polynomials
+            self.figure = plot_figure.Figure(figsize=(5*self.figure_resizer,
+                                                      5*self.figure_resizer))
             self.increased_font_size = True
         else:
-            self.default_font.config(size=9)
+            self.default_font.config(size=9); self.default_entry_font.config(size=9)
+            self.figure_resizer = 1.0
+            self.figure = plot_figure.Figure(figsize=(5*self.figure_resizer,
+                                                      5*self.figure_resizer))
             self.increased_font_size = False
+        # Redraw main figure in controlling window
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self); self.plotWidget = self.canvas.get_tk_widget()
+        self.plotWidget.grid(row=1, rowspan=6, column=0, columnspan=5, padx=3, pady=6)
+        self.plot_zernikes()
 
     def destroy(self):
         """
