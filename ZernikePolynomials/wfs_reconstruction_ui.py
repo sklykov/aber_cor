@@ -2,7 +2,7 @@
 """
 GUI for perform wavefront reconstruction.
 
-It's can be used for test of implemented algorithm (see description in called functions) on
+It can be used for test of implemented algorithm (see description in called functions) on
 many recorded images, stored locally.
 @author: ssklykov
 """
@@ -319,7 +319,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             input_value = self.threshold_value.get()
             if input_value < 1 or input_value > 255:  # bounds for an ubyte (U8) image
                 self.threshold_value.set(self.default_threshold)
-        except Exception:
+        except tk.TclError:
             self.threshold_value.set(self.default_threshold)
 
     def validate_radius(self, *args):

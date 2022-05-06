@@ -71,7 +71,7 @@ def triangular_function(m: int, theta: float) -> float:
     Parameters
     ----------
     m : int
-        Azimutal order.
+        Azimuthal order.
     theta : float
         Angle from polar coordinates associated with the unit circle .
 
@@ -125,7 +125,7 @@ def zernike_polynomials_sum_tuned(orders: list, alpha_coefficients: list, step_r
     orders : list
         List of Zernike polynomials orders recorded in tuples (m, n) inside the list like [(m, n), ...].
     alpha_coefficients: list
-        List with tunning coefficients (amplitudes) of each polynomial for their sum calculation.
+        With tuning coefficients (amplitudes) of each polynomial for their sum calculation.
     step_r : float, optional
         Step for calculation of radius for a summing map (colormap). The default is 0.01.
     step_theta : float, optional
@@ -184,7 +184,7 @@ def plot_zps_polar(orders: list, step_r: float = 0.005, step_theta: float = 0.5,
     title : str, optional
         Title for placing on the plot, e.g. for specific single polynomial. The default is "Sum of Zernike polynomials".
     alpha_coefficients: list, optional
-        List with tunning coefficients (amplitudes) of each polynomial for their sum calculation.
+        List with tuning coefficients (amplitudes) of each polynomial for their sum calculation.
     show_amplitudes : bool, optional
         Shows the colour-bar on the plot with amplitudes. The default is False.
 
@@ -209,22 +209,22 @@ def plot_zps_polar(orders: list, step_r: float = 0.005, step_theta: float = 0.5,
 def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: float = 0.01,
                        step_theta: float = 1.0, show_amplitudes: bool = False):
     """
-    Plot Zernike's polynomials sum ("zps") in polar projection for the unit radius circle on the input matplotlib.figure instance.
+    Plot Zernike's polynomials sum ("zps") in polar projection for the unit radius circle on the input matplotlib. figure instance.
 
     Parameters
     ----------
     figure : matplotlib.figure.Figure()
-        The Figure() class instance from matplotlib.figure module for plotting the Zernkike's polynomials sum on that.
+        The Figure() class instance from 'matplotlib.figure' module for plotting the Zernike's polynomials sum on that.
     orders : list
-        List of Zernike polynomials orders recorded in tuples (m, n) inside the list like [(m, n), ...].
+        With Zernike polynomials orders recorded in tuples (m, n) inside the list like [(m, n), ...].
     alpha_coefficients: list
-        List with tuning coefficients (amplitudes) of each polynomial for their sum calculation.
+        With tuning coefficients (amplitudes) of each polynomial for their sum calculation.
     step_r : float, optional
         Step for calculation of radius for a summing map (colormap). The default is 0.01.
     step_theta : float, optional
         Step (in grades) for calculation of angle for a summing map (colormap). The default is 1.0.
     show_amplitudes : bool, optional
-        Shows the colourbar on the plot with amplitudes. The default is False.
+        Shows the colour-bar on the plot with amplitudes. The default is False.
 
     Raises
     ------
@@ -260,7 +260,7 @@ def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: f
 
 def vectorized_triangular_function(m: int, Theta: np.ndarray) -> np.ndarray:
     """
-    Calculate triangular Zernike function on the input array of angles theta (vectorization).
+    Calculate triangular Zernike's function on the input array of angles theta (vectorization).
 
     Parameters
     ----------
@@ -466,7 +466,7 @@ def get_classical_polynomial_name(mode: tuple, short_names: bool = False) -> str
     """
     Return the classical name of Zernike polynomial.
 
-    Till the 4th order (including) - the names taken from the Wikipedia artuicle https://en.wikipedia.org/wiki/Zernike_polynomials
+    Till the 4th order (including) - the names taken from the Wikipedia article https://en.wikipedia.org/wiki/Zernike_polynomials
     5th order names - from the website https://www.telescope-optics.net/monochromatic_eye_aberrations.htm.
     6th order and 7th names - my guess about the naming.
 

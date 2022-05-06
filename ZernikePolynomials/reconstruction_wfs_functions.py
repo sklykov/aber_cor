@@ -13,7 +13,7 @@ import numpy as np
 from skimage.feature import peak_local_max
 # import time
 from matplotlib.patches import Circle
-# from matplotlib.patches import Rectangle  # uncomment if need for visualization
+# from matplotlib.patches import Rectangle  # uncomment in need of visualization of selected area for CoM calculation
 from scipy import ndimage
 from calc_zernikes_sh_wfs import check_img_coordinate
 from threading import Thread
@@ -34,7 +34,7 @@ def get_localCoM_matrix(image: np.ndarray, axes_fig, min_dist_peaks: int = 15, t
     image : np.ndarray
         Shack-Hartmann image with focal spots of focused wavefront.
     axes_fig : matplotlib.Axes
-        Axes class of the figure shown in the GUI widget (window).
+        Class of the figure shown in the GUI widget (window).
     min_dist_peaks : int, optional
         Minimal distance between two local peaks. The default is 15.
     threshold_abs : float, optional
@@ -79,7 +79,7 @@ def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndar
     Parameters
     ----------
     axes_fig : matplotlib.Axes
-        Axes class of the figure shown in the GUI widget (window).
+        Class 'Axes' of the figure shown in the GUI widget (window).
     picture_as_array : np.ndarray
         Shack-Hartmann image with focal spots of focused wavefront.
     threshold_abs : float
@@ -180,7 +180,7 @@ def get_zernike_coefficients_list(selected_order: int) -> list:
                                  5: [(-1, 1), (1, 1), (-2, 2), (0, 2), (2, 2), (-3, 3), (-1, 3), (1, 3), (3, 3),
                                      (-4, 4), (-2, 4), (0, 4), (2, 4), (4, 4), (-5, 5), (-3, 5), (-1, 5), (1, 5),
                                      (3, 5), (5, 5)]}
-    if selected_order >= 1 and selected_order <= 5:
+    if 1 <= selected_order <= 5:
         return zernike_coefficients_dict[selected_order]
     else:
         return []
@@ -193,7 +193,7 @@ def get_zernike_order_from_coefficients_number(coefficients_number: int) -> int:
     Parameters
     ----------
     coefficients_number : int
-        Number of coeffficients with orders (m ,n).
+        Number of coefficients with orders (m ,n).
 
     Returns
     -------
@@ -202,7 +202,7 @@ def get_zernike_order_from_coefficients_number(coefficients_number: int) -> int:
 
     """
     coefficients_number_dict = {2: 1, 5: 2, 9: 3, 14: 4, 20: 5, 27: 6, 35: 7}
-    if coefficients_number >= 2 and coefficients_number <= 35:
+    if 2 <= coefficients_number <= 35:
         return coefficients_number_dict[coefficients_number]
     else:
         return -1
@@ -212,7 +212,7 @@ def calc_integrals_on_apertures_unit_circle(integration_limits: np.ndarray, thet
                                             messages_queue: Queue, n_polynomial: int = 1, aperture_radius: float = 15.0,
                                             n_steps: int = 50, swapXY: bool = True) -> np.ndarray:
     """
-    Calculate integrals using trapezodial rule inside the sub-apertures, which lies inside the unit circle.
+    Calculate integrals using trapezoidal rule inside the sub-apertures, which lies inside the unit circle.
 
     Parameters
     ----------
@@ -227,7 +227,7 @@ def calc_integrals_on_apertures_unit_circle(integration_limits: np.ndarray, thet
     n : int
         Radial order of the Zernike polynomial.
     messages_queue : Queue
-        Queue pipe for checking of Stop event and sending back the messages about the calculation progress.
+        Pipe for checking of Stop event and sending back the messages about the calculation progress.
     n_polynomial : int, optional
         Number of polynomial for which the integration calculated. The default is 1.
     aperture_radius : float, optional
@@ -329,6 +329,8 @@ def calc_integral_matrix_zernike(progress_bar, zernike_polynomials_list: list, i
 
     Parameters
     ----------
+    progress_bar: tkinter.Progressbar
+        The widget for giving a hint on the integration progress.
     zernike_polynomials_list: list
         All polynomial specification as 2 orders (m, n) in list.
     integration_limits : np.ndarray
@@ -338,7 +340,7 @@ def calc_integral_matrix_zernike(progress_bar, zernike_polynomials_list: list, i
     rho0 : np.ndarray
         Polar coordinates r of sub-aperture centers.
     messages_queue : Queue
-        Queue pipe for checking of Stop event and sending back the messages about the calculation progress.
+        Pipe for checking of Stop event and sending back the messages about the calculation progress.
     aperture_radius : float, optional
         Radius of sub-aperture in pixels on the image. The default is 15.0.
     n_steps : int, optional
@@ -488,7 +490,7 @@ class IntegralMatrixThreaded(Thread):
 
     def run(self):
         """
-        Calculate integral matrix calling specified functions above (look also for defaul values).
+        Calculate integral matrix calling specified functions above (look also for default values).
 
         Returns
         -------

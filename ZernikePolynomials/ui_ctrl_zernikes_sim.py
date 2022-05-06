@@ -48,7 +48,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.corrections_loaded = False; self.flatten_field_coefficients = np.zeros(shape=1)
         self.corrected_voltages = np.zeros(shape=1); self.increased_font_size = False
         self.sliders_shown = True  # flag for the controlling of controls representation
-        tk.ttk.Style().theme_use('default')  # also can be: classic, alt, clam
+        # tk.ttk.Style().theme_use('default')  # also can be: classic, alt, clam
         self.amplitudes_doubleVars_dict = {}; self.amplitudes_inputs_dict = {}
         self.icons_dict = {}; self.canvas_dict = {}; self.plotWidgets_dict = {}
 
@@ -102,7 +102,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.ampl_ctrls = tk.Toplevel(master=self)  # additional window, master - the main window
 
         # Placing all created widgets in the grid layout on the main window
-        padx = 3; pady = 6  # overall additional border distances for all widgets
+        padx = 2; pady = 5  # overall additional border distances for all widgets
         self.pady = pady; self.padx = padx
         self.zernikesLabel.grid(row=0, rowspan=1, column=0, columnspan=1, padx=padx, pady=pady)
         self.max_order_selector.grid(row=0, rowspan=1, column=1, columnspan=1, padx=padx, pady=pady)
@@ -361,7 +361,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 self.amplitudes_doubleVars_dict[(m, n)].set(self.amplitudes[i]); i += 1
                 self.amplitudes_doubleVars_dict[(m, n)].trace_add("write", self.amplitude_input_changed)
                 self.amplitudes_inputs_dict[(m, n)] = Spinbox(self.amplitudes_ctrl_boxes_dict[(m, n)],
-                                                              from_=-1.0, to=1.0, increment=0.01, width=4,
+                                                              from_=-1.0, to=1.0, increment=0.01, width=5,
                                                               exportselection=True,
                                                               textvariable=self.amplitudes_doubleVars_dict[(m, n)])
                 pad = 2
@@ -393,7 +393,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             if os.path.isfile(current_icon_path):
                 img = skimage.io.imread(current_icon_path)
                 axes = self.icons_dict[key].add_axes(rect=[0.0, 0.0, 1.0, 1.0])  # full size figure adding
-                axes.imshow(img); axes.axis('off')  # laoding the image on the figure.axes
+                axes.imshow(img); axes.axis('off')  # loading the image on the figure.axes
                 self.canvas_dict[key].draw()  # refreshing GUI
 
     def amplitude_input_changed(self, *args):
@@ -847,7 +847,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
     def load_flat_field(self):
         """
-        Load corrections for flattening the aberrations distribution (applied by a device).
+        Load corrections for flattening the distribution of aberrations (applied by a device).
 
         Returns
         -------
@@ -860,7 +860,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             try:
                 self.fitted_offsets = loadmat(path_fitted_offses)['Zerns']  # scipy.io.loadmat, specific key for dict
             except KeyError as e:
-                print("The precoded key " + str(e) + " is not available in opened mat file")
+                print("The pre-coded key " + str(e) + " is not available in opened mat file")
             if isinstance(self.fitted_offsets, np.ndarray):
                 print("Fitted offsets for Zernike amplitudes loaded")
                 # Proceed for loading next file
@@ -879,10 +879,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                         self.corrections_loaded = True; self.visualize_correction_button.config(state='normal')
                 else:
                     # Disabling now the flattening field coefficients only by not loading any file
-                    self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(size=1)
+                    self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(shape=1)
         else:
             # Disabling now the flattening field coefficients only by not loading any file
-            self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(size=1)
+            self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(shape=1)
 
     def visualize_correction(self):
         """
@@ -924,7 +924,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # TODO: Check all windows layouts
         if not self.increased_font_size:
             self.default_font.config(size=11)  # makes the main text font size 11
-            self.default_entry_font.config(size=11)  # makes the text in entires font size 11
+            self.default_entry_font.config(size=11)  # makes the text in entries font size 11
             self.figure_resizer = 1.2
             # Resize main ctrl figure for sum of polynomials
             self.figure = plot_figure.Figure(figsize=(5*self.figure_resizer,
