@@ -2,7 +2,8 @@
 """
 Compose tests for implemented modal phase wavefront reconstruction using decomposition to Zernike polynomials.
 
-@author: ssklykov
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
 """
 # %% Imports
 from calc_zernikes_sh_wfs import calc_integral_matrix_zernike

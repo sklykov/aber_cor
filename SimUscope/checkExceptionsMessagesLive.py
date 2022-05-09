@@ -2,7 +2,8 @@
 """
 Module for import into the camera GUI for performing periodically checks that there are no exceptions happened and for printing messages.
 
-@author: ssklykov
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
 """
 # %% Imports
 from threading import Thread

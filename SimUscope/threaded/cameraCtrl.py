@@ -2,7 +2,8 @@
 """
 Class wrapper for controlling PCO camera using separate thread and implementation of its native functions.
 
-@author: ssklykov
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
 """
 # %% Imports
 from threading import Thread

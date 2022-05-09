@@ -2,7 +2,9 @@
 """
 GUI for representing and controlling Zernike polynomials.
 
-@author: ssklykov
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
+
 """
 # %% Imports
 import tkinter as tk
@@ -226,7 +228,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window vertically
         x_shift = self.master.winfo_x() + self.master.winfo_width() + 3*self.padx  # shift of Toplevel window horizontally
         self.ampl_ctrls.destroy(); self.ampl_ctrls = tk.Toplevel(master=self)
-        self.ampl_ctrls.wm_transient(self); self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)
+        # self.ampl_ctrls.wm_transient(self)  # de-activate all buttons except close on this Toplevel widget
+        self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)
         self.ampl_ctrls.title("Amplitude controls")
         self.ampl_ctrls.geometry(f'+{x_shift}+{y_shift}')  # shifting relative to the main window size and positions
         self.master.lift(aboveThis=self.ampl_ctrls)  # makes the main window above the created amplitudes controls
@@ -457,14 +460,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 self.amplitudes_sliders_dict[(m, n)] = tk.Scale(self.amplitudes_ctrl_boxes_dict[(m, n)],
                                                                 from_=-1.0, to=1.0, orient='horizontal',
                                                                 resolution=0.01, sliderlength=16,
-                                                                tickinterval=0.5, length=156,
+                                                                tickinterval=0.5, length=162,
                                                                 command=self.sliderValueChanged,
                                                                 repeatinterval=200)
                 self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=1)
                 self.amplitudes_sliders_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1)
                 m += 2  # according to the specification of Zernike polynomial
 
-    # %% Communication with device
+    # %% Ctrl of a device
     def device_selection(self, new_device):
         """
         Handle the UI event of selecting of device.
@@ -486,7 +489,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     import serial; global serial  # Serial library (pyserial) for general communication with a device
                     import serial.tools.list_ports as list_ports; global list_ports
                     print("Serial library imported")
-                except ValueError:
+                except ImportError:
                     print("Serial library https://pyserial.readthedocs.io/en/latest/index.html is not installed")
                 # Below - attempt to import library for voltages calculation (in-house developed)
                 try:
@@ -921,7 +924,6 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        # TODO: Check all windows layouts
         if not self.increased_font_size:
             self.default_font.config(size=11)  # makes the main text font size 11
             self.default_entry_font.config(size=11)  # makes the text in entries font size 11
@@ -940,6 +942,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.canvas = FigureCanvasTkAgg(self.figure, master=self); self.plotWidget = self.canvas.get_tk_widget()
         self.plotWidget.grid(row=1, rowspan=6, column=0, columnspan=5, padx=3, pady=6)
         self.plot_zernikes()
+        # TODO: Make this part as the control window
+        self.resizer_ctrl_window = tk.Toplevel(master=self)  # initialize the additional Toplevel window
+        self.resizer_ctrl_window.lift(aboveThis=self)  # making a Toplevel window on the top of master one
 
     def destroy(self):
         """

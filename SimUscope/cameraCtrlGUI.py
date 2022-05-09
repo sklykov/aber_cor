@@ -2,7 +2,8 @@
 """
 Simple GUI for representing of generated noisy image using PyQT.
 
-@author: ssklykov
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
 """
 # %% Imports
 # import sys

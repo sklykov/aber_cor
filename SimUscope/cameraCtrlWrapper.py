@@ -4,7 +4,9 @@ Class wrapper for controlling PCO or simulated camera using separate process.
 
 It implements API functions provided in the pco controlling library https://pypi.org/project/pco/
 For dependency list - see the imports (the simplest form).
-@author: ssklykov
+
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
 """
 # %% Imports
 from multiprocessing import Process, Queue

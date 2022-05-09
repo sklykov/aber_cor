@@ -4,7 +4,9 @@ GUI for perform wavefront reconstruction.
 
 It can be used for test of implemented algorithm (see description in called functions) on
 many recorded images, stored locally.
-@author: ssklykov
+
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
 """
 # %% Imports
 import tkinter as tk

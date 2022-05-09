@@ -2,7 +2,9 @@
 """
 Calculation of Zernike polynomials, plot their surface maps on the unit apertures.
 
-@author: ssklykov
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
+
 """
 # %% Imports and globals
 import numpy as np
@@ -467,7 +469,7 @@ def get_classical_polynomial_name(mode: tuple, short_names: bool = False) -> str
     Return the classical name of Zernike polynomial.
 
     Till the 4th order (including) - the names taken from the Wikipedia article https://en.wikipedia.org/wiki/Zernike_polynomials
-    5th order names - from the website https://www.telescope-optics.net/monochromatic_eye_aberrations.htm.
+    5th order names - from the website https://www.telescope-optics.net/monochromatic_eye_aberrations.htm
     6th order and 7th names - my guess about the naming.
 
     Parameters
@@ -578,16 +580,13 @@ def test():
         (m, n) = test_order
         assert abs(radial_polynomial(m, n, r)-tabular_radial_polynomial(m, n, r)) < 1.0E-6, f'Check tabulated R{m, n}'
         assert abs(radial_polynomial_derivative_dr(m, n, r)-tabular_radial_derivative_dr(m, n, r)) < 1.0E-6, f'Tab. dR{m, n}!'
-        # print(radial_polynomial_derivative_dr(m, n, r), tabular_radial_derivative_dr(m, n, r))
-        # print(radial_polynomial(m, n, r), tabular_radial_polynomial(m, n, r))
     print("All tests passed")
 
 
 # %% Tests
 if __name__ == '__main__':
     test()  # Testing implemented recurrence equations and tabular values
-
-    # %% Plotting results over the surface
+    # Plotting results over the surface
     step_r = 0.01; step_theta = 0.5  # in grads
     orders = [(7, 7)]  # specification of (m, n) order for polynomial plotting
     plot_zps_polar(orders, step_r, step_theta, "")
