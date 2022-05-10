@@ -5,7 +5,8 @@ Specification of calculation functions for reconstruction using non- and aberrat
 These functions are called in 'wfs_reconstruction_ui.py' for using it in the GUI controlling program.
 According to the doctoral thesis by Antonello, J. (2014): https://doi.org/10.4233/uuid:f98b3b8f-bdb8-41bb-8766-d0a15dae0e27
 
-@author: ssklykov
+@author: Sergei Klykov (GitHub: @ssklykov)
+@license: GPLv3
 """
 
 # %% Imports and globals
@@ -15,11 +16,10 @@ from skimage.feature import peak_local_max
 from matplotlib.patches import Circle
 # from matplotlib.patches import Rectangle  # uncomment in need of visualization of selected area for CoM calculation
 from scipy import ndimage
-from calc_zernikes_sh_wfs import check_img_coordinate
 from threading import Thread
 from queue import Empty, Queue
 from zernike_pol_calc import normalization_factor
-from calc_zernikes_sh_wfs import (rho_ab, rho_integral_funcX, rho_integral_funcY,
+from calc_zernikes_sh_wfs import (rho_ab, rho_integral_funcX, rho_integral_funcY, check_img_coordinate,
                                   r_integral_tabular_funcX, r_integral_tabular_funcY)
 
 

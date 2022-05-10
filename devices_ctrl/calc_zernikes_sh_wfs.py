@@ -19,9 +19,9 @@ from skimage.feature import peak_local_max
 import time
 from matplotlib.patches import Rectangle, Circle
 from scipy import ndimage
-from zernike_pol_calc import radial_polynomial, radial_polynomial_derivative_dr, triangular_function
-from zernike_pol_calc import triangular_derivative_dtheta, normalization_factor
-from zernike_pol_calc import tabular_radial_polynomial, tabular_radial_derivative_dr  # for speeding up calculations
+from zernike_pol_calc import (radial_polynomial, radial_polynomial_derivative_dr, triangular_function,
+                              triangular_derivative_dtheta, normalization_factor,
+                              tabular_radial_polynomial, tabular_radial_derivative_dr)  # for speeding up calculations
 from numpy.linalg import lstsq
 plt.close('all')
 

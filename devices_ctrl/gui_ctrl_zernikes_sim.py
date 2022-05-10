@@ -493,7 +493,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     print("Serial library https://pyserial.readthedocs.io/en/latest/index.html is not installed")
                 # Below - attempt to import library for voltages calculation (in-house developed)
                 try:
-                    import getvolt as gv  # import developed in-house library available for the other parts of program
+                    from getvolt import GetVolt as gv  # import developed in-house library for some calculations
                     global gv  # make the name global for accessibility
                     print("Get volts module imported")
                     self.loadInflMatrixButton.state(['!disabled'])  # activate the influence matrix
@@ -541,6 +541,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             if file_opened:
                 rows, cols = self.influence_matrix.shape
                 # Influence matrix successfully loaded => activate the possibility to calculate voltages
+                print("Influence matrix loaded")
                 if (rows > 0) and (cols > 0):
                     self.getVoltsButton.state(['!disabled'])
                 else:
@@ -558,17 +559,25 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.zernike_amplitudes = np.zeros(self.influence_matrix.shape[0])  # initial amplitudes of all polynomials = 0
         # According to the documentation, piston is included
         diff_amplitudes_size = 0  # for collecting difference between specified amplitudes and calculation back
-        for key in self.amplitudes_sliders_dict.keys():  # loop through all UI ctrls
-            if abs(self.amplitudes_sliders_dict[key].get()) > 1.0E-6:  # non-zero amplitude provided by the user
-                (m, n) = key
-                diff_amplitudes_size += 1  # count for non-zero specified amplitudes
-                j = get_osa_standard_index(m, n)  # calculation implemented according to the Wiki
-                self.zernike_amplitudes[j] = self.amplitudes_sliders_dict[key].get()
-        # Additional correction of initial deformations (aberrations)
+        if self.sliders_shown:
+            for key in self.amplitudes_sliders_dict.keys():  # loop through all UI ctrls
+                if abs(self.amplitudes_sliders_dict[key].get()) > 1.0E-6:  # non-zero amplitude provided by the user
+                    (m, n) = key
+                    diff_amplitudes_size += 1  # count for non-zero specified amplitudes
+                    j = get_osa_standard_index(m, n)  # calculation implemented according to the Wiki
+                    self.zernike_amplitudes[j] = self.amplitudes_sliders_dict[key].get()
+        else:
+            for key in self.amplitudes_doubleVars_dict.keys():
+                if abs(self.amplitudes_doubleVars_dict[key].get()) > 1.0E-6:  # non-zero amplitude provided by the user
+                    (m, n) = key
+                    diff_amplitudes_size += 1  # count for non-zero specified amplitudes
+                    j = get_osa_standard_index(m, n)  # calculation implemented according to the Wiki
+                    self.zernike_amplitudes[j] = self.amplitudes_doubleVars_dict[key].get()
+        # Additional correction of initial deformations on a device
         if self.corrections_loaded:
             self.corrected_zernike_amplitudes = np.zeros(self.zernike_amplitudes.shape[0])
             for j in range((self.zernike_amplitudes.shape[0])):
-                # ??? sign - check in the legacy code
+                # ??? sign in an expression below - check in the legacy code
                 self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] - self.flatten_field_coefficients[j][0]
             self.corrected_voltages = gv.solve_InfMat(self.influence_matrix, self.zernike_amplitudes,
                                                       self.maxV_selector_value.get())
@@ -677,7 +686,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # All initialization steps are analogue to the specified for amplitudes controls
         # Add the additional window evoked by the button for communication with the device
         self.serial_comm_ctrl = tk.Toplevel(master=self)  # additional window, master - the main window
-        y_shift = self.master.winfo_y() + self.master.winfo_height() + 7*self.pady  # shift of Toplevel window vertically
+        y_shift = self.master.winfo_y() + self.master.winfo_height() + 8*self.pady  # shift of Toplevel window vertically
         x_shift = self.master.winfo_x()  # shift of Toplevel window horizontally
         self.serial_comm_ctrl.geometry(f'+{x_shift}+{y_shift}')
         # Below - rewriting of default destroy event for closing the serial connection - handle closing of COM also
