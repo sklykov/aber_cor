@@ -67,7 +67,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.slider_length = 168  # default length of sliders controllers
         self.default_font = tk.font.nametofont("TkDefaultFont"); self.default_entry_font = tk.font.nametofont("TkTextFont")
         self.default_menu_font = tk.font.nametofont("TkMenuFont"); self.tooltip_font = tk.font.nametofont("TkTooltipFont")
-        self.main_figure_size = 5.0; self.icon_figure_size = 0.5
+        self.main_figure_size = 5.0; self.icon_figure_size = 0.55
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
@@ -140,9 +140,11 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Below - blurred text fixing for launching this script by Python console (not from ID, there it isn't observed)
         print("Script launched on:", platform.system())
         if platform.system() == "Windows":
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            dpi = master.winfo_fpixels('1i')
+            # print(dpi)  #  check the usage!
 
-    # %% Sum of polynomials ctrl
+    # %% Simulation
     def plot_zernikes(self):
         """
         Plot the sum of specified Zernike's polynomials amplitudes.
@@ -488,7 +490,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # self.ampl_ctrls.withdraw()  # delete window from a screen
         pass
 
-    # %% Ctrl of a device
+    # %% Device ctrl
     def operation_mode_selection(self, operation_mode):
         """
         Handle the UI event of selecting of device.
@@ -578,7 +580,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         self.zernike_amplitudes = np.zeros(self.influence_matrix.shape[0])  # initial amplitudes of all polynomials = 0
-        # According to the documentation, piston is included
+        # Collecting all non-zero selected polynomial amplitudes
         diff_amplitudes_size = 0  # for collecting difference between specified amplitudes and calculation back
         if self.sliders_shown:
             for key in self.amplitudes_sliders_dict.keys():  # loop through all UI ctrls
@@ -594,11 +596,13 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     diff_amplitudes_size += 1  # count for non-zero specified amplitudes
                     j = get_osa_standard_index(m, n)  # calculation implemented according to the Wiki
                     self.zernike_amplitudes[j] = self.amplitudes_doubleVars_dict[key].get()
+        # !!! TODO - for now, the direction dictates that the amplitudes should be inverted
+        self.zernike_amplitudes = -self.zernike_amplitudes
         # Additional correction of initial deformations on a device
         if self.corrections_loaded:
             self.corrected_zernike_amplitudes = np.zeros(self.zernike_amplitudes.shape[0])
             for j in range((self.zernike_amplitudes.shape[0])):
-                # ??? sign in an expression below - check in the legacy code
+                # ??? sign in an expression below - check in the legacy code, now because of inversion of sign above!
                 self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] - self.flatten_field_coefficients[j][0]
             self.corrected_voltages = gv.solve_InfMat(self.influence_matrix, self.corrected_zernike_amplitudes,
                                                       self.maxV_selector_value.get())
@@ -701,9 +705,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
             # Device selector
             self.ctrl_device_names = ["Old (uscope)", "New (63 pins)"]
-            self.selected_ctrl_device = tk.StringVar(); self.selected_ctrl_device.set(self.ctrl_device_names[0])
+            self.selected_ctrl_device = tk.StringVar(); self.selected_ctrl_device.set(self.ctrl_device_names[1])
             self.ctrl_device_selector = OptionMenu(self.serial_comm_ctrl, self.selected_ctrl_device,
-                                                   self.ctrl_device_names[0], *self.ctrl_device_names,
+                                                   self.ctrl_device_names[1], *self.ctrl_device_names,
                                                    command=self.selection_of_device)
 
             # Placing buttons on the window
@@ -825,32 +829,27 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if self.ampcomImported:  # flag showing that internal library imported
             VMAX = self.maxV_selector_value.get()
             if self.deviceHandle is not None:  # calculate the proper values to send
-                if self.volts_written:  # zero all channels before writing new values
-                    if self.selected_ctrl_device == self.ctrl_device_names[0]:
-                        ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)  # bad practice to provide delay
-                    else:
-                        ampcom.AmpCom.AmpZero(self.deviceHandle); time.sleep(0.2)
-                    # self.get_device_status()  # for debugging
+                # zero all channels before writing new values - not necessary
                 # Calculate and send voltages to a device
                 if self.selected_ctrl_device.get() == self.ctrl_device_names[0]:
                     if len(self.parse_indices) > 0:  # checking the loaded ignored pins
-                        # self.getVolts()  # update voltages
+                        if self.corrections_loaded:
+                            self.voltages = self.corrected_voltages
                         self.converted_voltages = ampcom_pt.AmpCom.create_varr2(self.voltages, VMAX, self.parse_indices)
                         print("Volts Written? :", ampcom_pt.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
-                        time.sleep(0.25)  # magic number (bad practice) suspend to receive full response
+                        time.sleep(0.24)  # magic number (bad practice) suspend to receive full response
                         self.get_device_status()  # for debugging
                         print("Device updated?", ampcom_pt.AmpCom.AmpUpdate(self.deviceHandle))
                         self.volts_written = True  # flag tracing that some voltages written into the device
                     else:
                         print("No voltages sent to a device, the ignored indices should be provided, use Load Map")
                 else:
-                    # Write voltages to a new type of devices
+                    # Send voltages to a new type of devices
                     if self.corrections_loaded:
-                        self.getVolts()
                         self.voltages = self.corrected_voltages
                     self.converted_voltages = ampcom.AmpCom.create_varr2(self.voltages, VMAX)
                     print("Volts Written? :", ampcom.AmpCom.AmpWrite(self.deviceHandle, self.converted_voltages))
-                    time.sleep(0.25)  # magic number (bad practice) suspend to receive full response
+                    time.sleep(0.24)  # magic number (bad practice) suspend to receive full response
                     self.get_device_status()  # for debugging
                     print("Device updated?", ampcom.AmpCom.AmpUpdate(self.deviceHandle))
                     self.volts_written = True  # flag tracing that some voltages written into the device
@@ -867,8 +866,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         if self.ampcomImported:  # works if the internal library imported
             if self.selected_ctrl_device.get() == self.ctrl_device_names[0]:
                 ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.2)
+                ampcom_pt.AmpCom.AmpUpdate(self.deviceHandle)
             else:
                 ampcom.AmpCom.AmpZero(self.deviceHandle); time.sleep(0.2)
+                ampcom.AmpCom.AmpUpdate(self.deviceHandle)  # necessary command
             self.get_device_status()  # for debugging
         else:
             print("Device not zeroed, check possibility to import local module")
@@ -927,9 +928,13 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                         self.corrections_loaded = True; self.visualize_correction_button.config(state='normal')
                 else:
                     # Disabling now the flattening field coefficients only by not loading any file
+                    if self.corrections_loaded:
+                        print("Hint: flattening corrections now not accounted, repeat loading")
                     self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(shape=1)
         else:
-            # Disabling now the flattening field coefficients only by not loading any file
+            # Disabling now the flattening field coefficients only by not loading any
+            if self.corrections_loaded:
+                print("Hint: flattening corrections now not accounted, repeat loading")
             self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(shape=1)
 
     def visualize_correction(self):
@@ -975,12 +980,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             if self.ampcomImported:
                 try:
                     if self.selected_ctrl_device.get() == self.ctrl_device_names[0]:
-                        ampcom_pt.AmpCom.AmpZero2(self.deviceHandle); time.sleep(0.25)
+                        ampcom_pt.AmpCom.AmpReset(self.deviceHandle)
                     else:
-                        ampcom.AmpCom.AmpZero(self.deviceHandle); time.sleep(0.25)
-                    print("The device should be zeroed due to ctrl window closing")
+                        ampcom.AmpCom.AmpReset(self.deviceHandle)
+                    print("The device should be reset due to the program closing")
                 except NameError:
-                    print("The device not zeroed")
+                    print("The device not reset")
                 finally:
                     self.deviceHandle.close()  # close the serial connection anyway
                     if not self.deviceHandle.isOpen():
@@ -992,7 +997,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.deviceHandle = None
             self.operation_mode_selector.set(self.operation_modes[0])
 
-    # %% Adjusting GUI sizes
+    # %% Adjust GUI
     def adjust_gui_sizes(self):
         """
         Fix the issue with font size in the GUI launched by the pure python interpreter.
@@ -1027,7 +1032,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                                                   text="Apply Configured Font and Figure Sizes")
         self.icon_figure_size_int = tk.DoubleVar(); self.icon_figure_size_int.set(self.icon_figure_size)
         self.icon_figure_size_ctrl = Spinbox(master=self.resizer_ctrl_window, from_=0.2, to=1.0,
-                                             increment=0.1, width=5, textvariable=self.icon_figure_size_int)
+                                             increment=0.01, width=5, textvariable=self.icon_figure_size_int)
         self.slider_length_int = tk.IntVar(); self.slider_length_int.set(self.slider_length)
         self.slider_length_ctrl = Spinbox(master=self.resizer_ctrl_window, from_=150, to=200,
                                           increment=1, width=5, textvariable=self.slider_length_int)
@@ -1101,7 +1106,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 self.icon_figure_size = figure_size
         except tk.TclError:
             print("Some non-double value specified for figure size")
-            self.main_figure_size_int.set(self.main_figure_size)
+            self.icon_figure_size_int_int.set(self.icon_figure_size)
 
         # Check if slider length changed
         try:
@@ -1134,12 +1139,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             if self.ampcomImported:
                 try:
                     if self.selected_ctrl_device.get() == self.ctrl_device_names[0]:
-                        ampcom_pt.AmpCom.AmpZero(self.deviceHandle); time.sleep(0.2)
+                        ampcom_pt.AmpCom.AmpReset(self.deviceHandle)
                     else:
-                        ampcom.AmpCom.AmpZero(self.deviceHandle); time.sleep(0.2)
-                    print("The device should be zeroed due to the program closing")
+                        ampcom.AmpCom.AmpReset(self.deviceHandle)
+                    print("The device should be reset due to the program closing")
                 except NameError:
-                    print("The device not zeroed")
+                    print("The device not reset")
                 finally:
                     self.deviceHandle.close()  # close the serial connection anyway
                     if not self.deviceHandle.isOpen():
