@@ -47,7 +47,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # Values initialization
         super().__init__(master)  # initialize the main window (frame) for all widgets
         self.plotColorbar = False; self.master.title("Zernike polynomials controls and representation")
-        self.master.geometry("+3+40")  # put the main window on the (+x, +y) coordinate away from the top left display coord.
+        self.master.geometry("+4+40")  # put the main window on the (+x, +y) coordinate away from the top left display coord.
         self.amplitudes = [0.0, 0.0]  # default amplitudes for the 1st order
         self.orders = [(-1, 1), (1, 1)]; self.flagFlattened = False; self.changedSliders = 1
         self.amplitudes_sliders_dict = {}; self.minV = 200; self.maxV = 400
@@ -64,10 +64,11 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         # tk.ttk.Style().theme_use('default')  # also can be: classic, alt, clam
         self.amplitudes_doubleVars_dict = {}; self.amplitudes_inputs_dict = {}
         self.icons_dict = {}; self.canvas_dict = {}; self.plotWidgets_dict = {}
-        self.slider_length = 168  # default length of sliders controllers
+        self.slider_length = 166  # default length of sliders controllers
         self.default_font = tk.font.nametofont("TkDefaultFont"); self.default_entry_font = tk.font.nametofont("TkTextFont")
         self.default_menu_font = tk.font.nametofont("TkMenuFont"); self.tooltip_font = tk.font.nametofont("TkTooltipFont")
         self.main_figure_size = 5.0; self.icon_figure_size = 0.55
+        self.__ORIGINAL_DPI = 120  # save the originally used DPI for developing this GUI
 
         # Below - matrices placeholders for possible returning some placeholders instead of exception
         self.voltages = np.empty(1); self.check_solution = np.empty(1); self.zernike_amplitudes = np.empty(1)
@@ -117,7 +118,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.ampl_ctrls = tk.Toplevel(master=self)  # additional window, master - the main window
 
         # Placing all created widgets in the grid layout on the main window
-        padx = 6; pady = 4  # overall additional border distances for all widgets
+        padx = 4; pady = 4  # overall additional border distances for all widgets
         self.pady = pady; self.padx = padx
         self.zernikesLabel.grid(row=0, rowspan=1, column=0, columnspan=1, padx=padx, pady=pady)
         self.max_order_selector.grid(row=0, rowspan=1, column=1, columnspan=1, padx=padx, pady=pady)
@@ -136,13 +137,6 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.selected_order.set(self.order_list[3]); self.after(0, self.number_orders_changed(self.order_list[3]))
         self.master_geometry = self.master.winfo_geometry()  # saves the main window geometry
         self.after_id = self.after(1000, self.always_on_top)  # launch the function bringing the main window always on top
-
-        # Below - blurred text fixing for launching this script by Python console (not from ID, there it isn't observed)
-        print("Script launched on:", platform.system())
-        if platform.system() == "Windows":
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
-            dpi = master.winfo_fpixels('1i')
-            # print(dpi)  #  check the usage!
 
     # %% Simulation
     def plot_zernikes(self):
@@ -172,7 +166,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         """
         self.plotColorbar = self.color_bar_state.get(); self.plot_zernikes()
 
-    def sliderValueChanged(self, new_pos):
+    def slider_value_changed(self, new_pos):
         """
         Any slider value has been changed and this function handles it.
 
@@ -232,11 +226,11 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        n_orders = int(selected_order[0]); pad = 5
+        n_orders = int(selected_order[0]); pad = 4
         # Refresh the TopLevel window and the associated dictionary with buttons
         y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window vertically
         # shift of Toplevel window horizontally
-        x_shift = self.master.winfo_x() + self.master.winfo_width() + (self.padx + self.padx//2)
+        x_shift = self.master.winfo_x() + self.master.winfo_width() + self.padx//2
         self.ampl_ctrls.destroy(); self.ampl_ctrls = tk.Toplevel(master=self)
         # self.ampl_ctrls.wm_transient(self)  # de-activate all buttons except close on this Toplevel widget
         self.ampl_ctrls.protocol("WM_DELETE_WINDOW", self.no_exit)
@@ -345,7 +339,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 input_frame.destroy()
             for key, icon in self.plotWidgets_dict.items():
                 icon.destroy()
-            # Recreate sliders and restore saved amplitde values
+            # Recreate sliders and restore saved amplitude values
             self.create_sliders()
             i = 0
             for key in self.amplitudes_sliders_dict.keys():  # set previously selected amplitudes
@@ -373,7 +367,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 self.amplitudes_doubleVars_dict[(m, n)].set(self.amplitudes[i]); i += 1
                 self.amplitudes_doubleVars_dict[(m, n)].trace_add("write", self.amplitude_input_changed)
                 self.amplitudes_inputs_dict[(m, n)] = Spinbox(self.amplitudes_ctrl_boxes_dict[(m, n)],
-                                                              from_=-1.0, to=1.0, increment=0.01, width=6,
+                                                              from_=-2.0, to=2.0, increment=0.01, width=6,
                                                               exportselection=True,
                                                               textvariable=self.amplitudes_doubleVars_dict[(m, n)])
                 pad = 2
@@ -469,11 +463,11 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             for polynomial in range(order + 1):  # number of polynomials = order + 1
                 # Slider below - to control an amplitude of polynomial
                 self.amplitudes_sliders_dict[(m, n)] = tk.Scale(self.amplitudes_ctrl_boxes_dict[(m, n)],
-                                                                from_=-1.0, to=1.0, orient='horizontal',
+                                                                from_=-2.0, to=2.0, orient='horizontal',
                                                                 resolution=0.01, sliderlength=16,
-                                                                tickinterval=0.5, length=self.slider_length,
-                                                                command=self.sliderValueChanged,
-                                                                repeatinterval=200)
+                                                                tickinterval=1.0, length=self.slider_length,
+                                                                command=self.slider_value_changed,
+                                                                repeatinterval=180)
                 self.amplitudes_labels_dict[(m, n)].grid(row=0, rowspan=1, column=0, columnspan=1)
                 self.amplitudes_sliders_dict[(m, n)].grid(row=1, rowspan=1, column=0, columnspan=1)
                 m += 2  # according to the specification of Zernike polynomial
@@ -596,14 +590,17 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                     diff_amplitudes_size += 1  # count for non-zero specified amplitudes
                     j = get_osa_standard_index(m, n)  # calculation implemented according to the Wiki
                     self.zernike_amplitudes[j] = self.amplitudes_doubleVars_dict[key].get()
-        # !!! TODO - for now, the direction dictates that the amplitudes should be inverted
+        # !!! TODO (statement below), for now the setup configuration forces to invert the amplitudes
         self.zernike_amplitudes = -self.zernike_amplitudes
         # Additional correction of initial deformations on a device
         if self.corrections_loaded:
             self.corrected_zernike_amplitudes = np.zeros(self.zernike_amplitudes.shape[0])
             for j in range((self.zernike_amplitudes.shape[0])):
-                # ??? sign in an expression below - check in the legacy code, now because of inversion of sign above!
-                self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] - self.flatten_field_coefficients[j][0]
+                # sign in an expression below - check in the legacy code exact one, now is controllable by a button
+                if self.selected_correction_sign.get():
+                    self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] - self.flatten_field_coefficients[j][0]
+                else:
+                    self.corrected_zernike_amplitudes[j] = self.zernike_amplitudes[j] + self.flatten_field_coefficients[j][0]
             self.corrected_voltages = gv.solve_InfMat(self.influence_matrix, self.corrected_zernike_amplitudes,
                                                       self.maxV_selector_value.get())
             self.corrected_voltages = np.expand_dims(self.corrected_voltages, axis=1)
@@ -640,9 +637,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        self.after(1000, self.validateMaxVoltageInput)  # sent request to validate the input value
+        self.after(1000, self.validate_max_voltage_input)  # sent request to validate the input value
 
-    def validateMaxVoltageInput(self):
+    def validate_max_voltage_input(self):
         """
         Validate user input into the Spinbox, that should accept only integer values.
 
@@ -710,7 +707,15 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                                                    self.ctrl_device_names[1], *self.ctrl_device_names,
                                                    command=self.selection_of_device)
 
-            # Placing buttons on the window
+            # Selector of flat field coefficients applied sign (sum or subtraction)
+            self.selected_correction_sign = tk.BooleanVar(); self.selected_correction_sign.set(True)
+            self.sign_corrections_selector = tk.Checkbutton(self.serial_comm_ctrl, text="- corrections",
+                                                            command=self.change_corrections_sign,
+                                                            onvalue=True, offvalue=False, relief=tk.RAISED,
+                                                            variable=self.selected_correction_sign)
+            self.sign_corrections_selector.select(); self.sign_corrections_selector.config(state="disabled")
+
+            # Placing buttons on the window controlling serial communication
             self.port_selector.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
             self.connection_label.grid(row=0, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
             self.get_device_status_button.grid(row=0, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
@@ -719,7 +724,8 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.load_zeroed_indices_button.grid(row=1, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
             self.load_flat_field_button.grid(row=1, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
             self.visualize_correction_button.grid(row=1, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
-            self.ctrl_device_selector.grid(row=2, rowspan=1, column=0, columnspan=4, padx=pad, pady=pad)
+            self.sign_corrections_selector.grid(row=2, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+            self.ctrl_device_selector.grid(row=2, rowspan=1, column=1, columnspan=2, padx=pad, pady=pad)
             self.serial_comm_ctrl.grid()
 
             # Disabling the buttons before some conditions fulfilled
@@ -772,7 +778,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
     def selection_of_device(self, selected_device):
         """
-        Old pr new device type for importing approprate controlling library.
+        Old pr new device type for importing appropriate controlling library.
 
         Returns
         -------
@@ -903,39 +909,46 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        path_fitted_offses = tk.filedialog.askopenfilename(filetypes=[("Matlab files", "*.mat")],
+        path_fitted_offsets = tk.filedialog.askopenfilename(filetypes=[("Matlab files", "*.mat")],
                                                            title="Open fitted offsets")
-        if path_fitted_offses is not None and len(path_fitted_offses) > 0:
+        if path_fitted_offsets is not None and len(path_fitted_offsets) > 0:
             try:
-                self.fitted_offsets = loadmat(path_fitted_offses)['Zerns']  # scipy.io.loadmat, specific key for dict
+                self.fitted_offsets = loadmat(path_fitted_offsets)['Zerns']  # scipy.io.loadmat, specific key for dict
+                file_loaded = True
             except KeyError as e:
                 print("The pre-coded key " + str(e) + " is not available in opened mat file")
-            if isinstance(self.fitted_offsets, np.ndarray):
+                file_loaded = False
+            if isinstance(self.fitted_offsets, np.ndarray) and file_loaded:
                 print("Fitted offsets for Zernike amplitudes loaded")
                 # Proceed for loading next file
                 path_offsets = tk.filedialog.askopenfilename(filetypes=[("Matlab files", "*.mat")],
                                                              title="Open Zernikes offsets")
                 if path_offsets is not None:
                     try:
-                        self.offset_zernikes = loadmat(path_offsets)['Off_Zern_Coeffs']  # scipy.io.loadmat
+                        self.offset_zernikes = loadmat(path_offsets)['Off_Zern_Coeffs']  # again, specific key
+                        file_loaded = True
                     except KeyError as e:
                         print("The pre-coded key " + str(e) + " is not available in opened mat file")
-                    if isinstance(self.offset_zernikes, np.ndarray):
+                        file_loaded = False
+                    if isinstance(self.offset_zernikes, np.ndarray) and file_loaded:
                         print("Offsets for Zernike amplitudes loaded")
                         # ??? Below - check the compliance with the legacy code
                         self.flatten_field_coefficients = self.fitted_offsets - self.offset_zernikes
                         self.flatten_field_coefficients = np.round(self.flatten_field_coefficients, 3)
-                        self.corrections_loaded = True; self.visualize_correction_button.config(state='normal')
+                        self.corrections_loaded = True; self.visualize_correction_button.config(state="normal")
+                        self.sign_corrections_selector.config(state="normal")
                 else:
                     # Disabling now the flattening field coefficients only by not loading any file
                     if self.corrections_loaded:
                         print("Hint: flattening corrections now not accounted, repeat loading")
                     self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(shape=1)
+                    self.sign_corrections_selector.config(state="disabled")
         else:
             # Disabling now the flattening field coefficients only by not loading any
             if self.corrections_loaded:
                 print("Hint: flattening corrections now not accounted, repeat loading")
             self.corrections_loaded = False; self.flatten_field_coefficients = np.ndarray(shape=1)
+            self.sign_corrections_selector.config(state="disabled")
 
     def visualize_correction(self):
         """
@@ -947,10 +960,14 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
         """
         if self.corrections_loaded:
+            self.flatten_zernike_profile()  # flatten profile before visualization
             for key in self.amplitudes_sliders_dict.keys():  # loop through all UI ctrls
                 (m, n) = key; j = get_osa_standard_index(m, n)  # calculation of polynomial index
                 if self.flatten_field_coefficients[j][0] > 1E-3:  # depends on precision of amplitude controls
-                    self.amplitudes_sliders_dict[key].set(self.flatten_field_coefficients[j][0])
+                    if self.selected_correction_sign.get():
+                        self.amplitudes_sliders_dict[key].set(self.flatten_field_coefficients[j][0])
+                    else:
+                        self.amplitudes_sliders_dict[key].set(-self.flatten_field_coefficients[j][0])
 
     def always_on_top(self):
         """
@@ -997,6 +1014,20 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
             self.deviceHandle = None
             self.operation_mode_selector.set(self.operation_modes[0])
 
+    def change_corrections_sign(self):
+        """
+        Change text after selecting / deselecting of check box with +/- corrections on GUI.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.selected_correction_sign.get():
+            self.sign_corrections_selector.config(text="- corrections", relief=tk.RAISED)
+        else:
+            self.sign_corrections_selector.config(text="+ corrections", relief=tk.SUNKEN)
+
     # %% Adjust GUI
     def adjust_gui_sizes(self):
         """
@@ -1007,7 +1038,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         None.
 
         """
-        # Specifiyng controls for adjusting font sizes
+        # Specifying controls for adjusting font sizes
         self.resizer_ctrl_window = tk.Toplevel(master=self)  # initialize the additional Toplevel window
         self.resizer_ctrl_window.lift(aboveThis=self)  # making a Toplevel window on the top of master one
 
@@ -1017,8 +1048,9 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.figure_size_label = Label(master=self.resizer_ctrl_window, text="Main figure size (inches):")
         self.icon_figure_size_label = Label(master=self.resizer_ctrl_window, text="Icon figure size (inches):")
         self.slider_length_label = Label(master=self.resizer_ctrl_window, text="Slider length (pixs):")
+        self.scale_slider_label = Label(master=self.resizer_ctrl_window, text="Scale of windows:")
 
-        # Spinboxes (integer selectors)
+        # Spin-boxes (integer selectors)
         self.default_font_size_int = tk.IntVar(); self.default_font_size_int.set(int(self.default_font.cget("size")))
         self.font_size_ctrl = Spinbox(master=self.resizer_ctrl_window, from_=8, to=16,
                                       increment=1, width=4, textvariable=self.default_font_size_int)
@@ -1036,9 +1068,20 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.slider_length_int = tk.IntVar(); self.slider_length_int.set(self.slider_length)
         self.slider_length_ctrl = Spinbox(master=self.resizer_ctrl_window, from_=150, to=200,
                                           increment=1, width=5, textvariable=self.slider_length_int)
-
-        # Grid layoout of labels and controls on the Toplevel window
-        pad = 8
+        # Below - report about current settings - monitor and its DPI
+        self.report_window = tk.Text(master=self.resizer_ctrl_window, height=2, width=36, wrap=tk.CHAR,
+                                     font=(self.default_font.actual()['family'], self.default_font.actual()['size']))
+        self.report_window.insert('end', ("Monitor sizes(pixels): " + str(root.winfo_screenwidth())
+                                          + "x" + str(root.winfo_screenheight()) + "\n"))
+        self.report_window.insert('end', ("Current scale factor: " + str(round(self.master.winfo_pixels('1i')/72, 1))
+                                          + ", Original one: " + str(round(self.__ORIGINAL_DPI/72, 1))))
+        self.scale_slider = tk.Scale(master=self.resizer_ctrl_window, from_=0.5, to=3.5, orient='horizontal',
+                                     resolution=0.1, sliderlength=17, tickinterval=1.0, length=170,
+                                     repeatinterval=150)
+        # self.scale_slider.set(self.master.winfo_pixels('1i')/self.__ORIGINAL_DPI)  # set the current actual scale
+        self.scale_slider.set(self.master.winfo_pixels('1i')/72)  # 72 - standard monitor DPI
+        # Grid layout of labels and controls on the Toplevel window
+        pad = 6
         self.default_font_size_label.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
         self.font_size_ctrl.grid(row=0, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
         self.entry_font_size_label.grid(row=1, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
@@ -1049,7 +1092,10 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         self.icon_figure_size_ctrl.grid(row=3, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
         self.slider_length_label.grid(row=4, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
         self.slider_length_ctrl.grid(row=4, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
-        self.apply_adjusted_fonts_button.grid(row=5, rowspan=1, column=0, columnspan=2, padx=pad, pady=pad)
+        self.report_window.grid(row=5, rowspan=1, column=0, columnspan=2, padx=pad, pady=pad)
+        self.scale_slider_label.grid(row=6, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+        self.scale_slider.grid(row=6, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
+        self.apply_adjusted_fonts_button.grid(row=7, rowspan=1, column=0, columnspan=2, padx=pad, pady=pad)
         self.resizer_ctrl_window.grid()
 
     def adjust_fonts_sizes(self):
@@ -1106,7 +1152,7 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
                 self.icon_figure_size = figure_size
         except tk.TclError:
             print("Some non-double value specified for figure size")
-            self.icon_figure_size_int_int.set(self.icon_figure_size)
+            self.icon_figure_size_int.set(self.icon_figure_size)
 
         # Check if slider length changed
         try:
@@ -1119,6 +1165,12 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
         except tk.TclError:
             print("Slider length not updated, input value isn't integer")
             self.slider_length_int.set(self.slider_length)
+
+        # Adjusting of scaling of GUI
+        if abs(self.scale_slider.get() - 1.0) >= 0.1:
+            print("Note that tkinter pick up this change after program relaunch in active ipython or python session!")
+            print("This is experimental feature, play a bit around")
+            self.master.tk.call('tk', 'scaling', self.scale_slider.get())
 
         # close the adjusting window
         self.resizer_ctrl_window.destroy()
@@ -1158,6 +1210,11 @@ class ZernikeCtrlUI(Frame):  # all widgets master class - top level window
 
 # %% Launch section
 if __name__ == "__main__":
+    # Below - blurred text fixing for launching this script by Python console (not from ID, there it isn't observed)
+    # Also, it should fix the problem with screen scaling (on Windows)
+    print("Script launched on:", platform.system())
+    if platform.system() == "Windows":
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
     root = tk.Tk()  # running instance of Tk()
     ui_ctrls = ZernikeCtrlUI(root)  # construction of the main frame
     ui_ctrls.mainloop()

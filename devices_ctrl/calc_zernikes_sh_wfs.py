@@ -571,7 +571,7 @@ def get_integral_limits_nonaberrated_centers(pics_folder: str = "pics", backgrou
         # Additionally, stretch a bit the contrast
         diff_nonaberrated = nonaberrated - abs(np.min(nonaberrated)); diff_nonaberrated *= (255/np.max(diff_nonaberrated))
         diff_nonaberrated = np.uint8(diff_nonaberrated)
-    # If the recorded background helps to enhance the contrast, then preserve the operation of background substraction
+    # If the recorded background helps to enhance the contrast, then preserve the operation of background subtraction
     if plot_results and subtract_background:
         plt.figure(); plt.imshow(background); plt.tight_layout(); plt.title("Background")
         plt.figure(); plt.imshow(nonaberrated); plt.tight_layout(); plt.title("Non-aberrated")

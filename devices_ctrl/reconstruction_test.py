@@ -40,8 +40,8 @@ if repo_pics:
     calibrations = os.path.join(current_path, "calibrations")  # the "calibrations" folder with all saved calculations data
     precalculated_zernikes = os.path.join(calibrations, "IntegralMatrix20TabularZernike_RepoPics.npy")
     # precalculated_zernikes2 = os.path.join(calibrations, "integral_calibration_matrix.npy")  # from UI calculations
-    precalculated_nonaberration = os.path.join(calibrations, "CoMsNonaberrated_RepoPics.npy")
-    # precalculated_nonaberration2 = os.path.join(calibrations, "detected_focal_spots.npy")  # from UI calculations
+    precalculated_nonaberrated = os.path.join(calibrations, "CoMsNonaberrated_RepoPics.npy")
+    # precalculated_nonaberrated2 = os.path.join(calibrations, "detected_focal_spots.npy")  # from UI calculations
     if not(os.path.exists(precalculated_zernikes)):
         t1 = time.time()  # get the current time measurement
         (coms_nonaberrated, pic_integral_limits,
@@ -52,17 +52,17 @@ if repo_pics:
         integral_matrix = calc_integral_matrix_zernike(zernikes_set, integration_limits, theta0, rho0, aperture_radius=aperture_radius,
                                                        n_steps=n_integration_steps, use_tabular_functions=True)
         np.save(precalculated_zernikes, integral_matrix)
-        if not(os.path.exists(precalculated_nonaberration)):  # if CoMs from non-aberrated image not saved, save them
-            np.save(precalculated_nonaberration, coms_nonaberrated)
+        if not(os.path.exists(precalculated_nonaberrated)):  # if CoMs from non-aberrated image not saved, save them
+            np.save(precalculated_nonaberrated, coms_nonaberrated)
         t2 = time.time()  # get the current time measurement
         if np.round(t2-t1, 3) > 60:
             print(f"Integration of the Zernike polynomials ({zernikes_set}) takes:", np.round((t2-t1)/60, 1), "minutes")
         else:
             print(f"Integration of the Zernike polynomials ({zernikes_set}) takes:", np.round(t2-t1, 3), "s")
     else:
-        integral_matrix = np.load(precalculated_zernikes); coms_nonaberrated = np.load(precalculated_nonaberration)
-        # coms_nonaberrated2 = np.load(precalculated_nonaberration2); diff_coms = coms_nonaberrated2 - coms_nonaberrated
-        # integral_matrix2 = np.load(precalculated_zernikes2); diff_int_matricies = integral_matrix2 - integral_matrix
+        integral_matrix = np.load(precalculated_zernikes); coms_nonaberrated = np.load(precalculated_nonaberrated)
+        # coms_nonaberrated2 = np.load(precalculated_nonaberrated2); diff_coms = coms_nonaberrated2 - coms_nonaberrated
+        # integral_matrix2 = np.load(precalculated_zernikes2); diff_int_matrices = integral_matrix2 - integral_matrix
         (coms_shifts, integral_matrix_aberrated) = get_coms_shifts(coms_nonaberrated, integral_matrix, plot_results=plot,
                                                                    threshold_abs=threshold, region_size=region_size)
         alpha_coefficients = list(get_polynomials_coefficients(integral_matrix_aberrated, coms_shifts)*np.pi)  # !!! * by pi
@@ -86,7 +86,7 @@ if shwfs:
     calibrations = os.path.join(current_path, "calibrations")  # the "calibrations" folder with all saved calculations data
     aberrated_pic_name = "AstigmatismPic2.png"  # Name of prerecorded picture with aberrations
     precalculated_zernikes = os.path.join(calibrations, "IntegralMatrix20TabZernike_RecordedAberrations.npy")
-    precalculated_nonaberration = os.path.join(calibrations, "CoMsNonaberrated_RecordedAberrations.npy")
+    precalculated_nonaberrated = os.path.join(calibrations, "CoMsNonaberrated_RecordedAberrations.npy")
     os.chdir(".."); os.chdir(".."); os.chdir("sh_wfs")  # Navigation to the local storage with recorded aberrations
     if not(os.path.exists(precalculated_zernikes)):
         t1 = time.time()  # get the current time measurement
@@ -101,15 +101,15 @@ if shwfs:
         integral_matrix = calc_integral_matrix_zernike(zernikes_set, integration_limits, theta0, rho0, aperture_radius=aperture_radius,
                                                        n_steps=n_integration_steps, use_tabular_functions=True)
         np.save(precalculated_zernikes, integral_matrix)
-        if not(os.path.exists(precalculated_nonaberration)):  # if CoMs from non-aberrated image not saved, save them
-            np.save(precalculated_nonaberration, coms_nonaberrated)
+        if not(os.path.exists(precalculated_nonaberrated)):  # if CoMs from non-aberrated image not saved, save them
+            np.save(precalculated_nonaberrated, coms_nonaberrated)
         t2 = time.time()  # get the current time measurement
         if np.round(t2-t1, 3) > 60:
             print(f"Integration of the Zernike polynomials ({zernikes_set}) takes:", np.round((t2-t1)/60, 1), "minutes")
         else:
             print(f"Integration of the Zernike polynomials ({zernikes_set}) takes:", np.round(t2-t1, 3), "s")
     else:
-        integral_matrix = np.load(precalculated_zernikes); coms_nonaberrated = np.load(precalculated_nonaberration)
+        integral_matrix = np.load(precalculated_zernikes); coms_nonaberrated = np.load(precalculated_nonaberrated)
         plot = False; threshold = 54.0
         (coms_shifts, integral_matrix_aberrated) = get_coms_shifts(coms_nonaberrated, integral_matrix,
                                                                    pics_folder=os.getcwd(), aberrated_pic_name=aberrated_pic_name,
