@@ -9,6 +9,7 @@ SimUscope/*.tiff  # testing acquisitions / file saving
 devices_ctrl/ampcom
 devices_ctrl/ampcom_pt
 devices_ctrl/getvolt
+devices_ctrl/gui_ctrl_zernikes_sim.py
 
 # Specifics from PyCharm
 .idea/

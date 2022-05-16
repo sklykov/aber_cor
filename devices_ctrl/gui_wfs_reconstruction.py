@@ -6,8 +6,10 @@ It can be used for test of implemented algorithm (see description in called func
 many recorded images, stored locally.
 
 @author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@license: GPLv3v\(check https://www.gnu.org/licenses/ )
+
 """
+
 # %% Imports
 import tkinter as tk
 from tkinter.ttk import Progressbar

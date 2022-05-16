@@ -6,13 +6,12 @@ It implements API functions provided in the pco controlling library https://pypi
 For dependency list - see the imports (the simplest form).
 
 @author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@license: GPLv3 (check https://www.gnu.org/licenses/ )
 """
 # %% Imports
 from multiprocessing import Process, Queue
 from queue import Empty, Full
 import time
-import pco
 import numpy as np
 
 
@@ -43,12 +42,20 @@ class CameraWrapper(Process):
         if self.camera_type == "PCO":
             # All the camera initialization code moved to the run() method!
             # It's because the camera handle returned by the DLL library is not pickleable by the pickle method !!!
-            self.initialized = True  # Additional flag for the start the loop in the run method (run Process!)
-            self.max_width = 2048; self.max_height = 2048
+            # Additionally, the import statement of controlling library moved here
+            try:
+                import pco
+                print("The controlling library available, info about it:", pco)
+                self.initialized = True  # Additional flag for the start the loop in the run method (run Process!)
+                self.max_width = 2048; self.max_height = 2048
+            except ImportError:
+                print("The pco library for controlling of the camera isn't available."
+                      + " Install it from: https://pypi.org/project/pco/")
+                self.initialized = False
         # Initialization code for the Simulated camera
         elif self.camera_type == "Simulated":
             self.cameraReference = None  # no associated library call to any API functions
-            self.initialized = True  # Additional flag for the start the loop in the run method
+            self.initialized = True  # Additional flag for the start the loop in the run() method
             self.max_width = image_width; self.max_height = image_height
             self.image_height = image_height; self.image_width = image_width
             try:
@@ -59,7 +66,7 @@ class CameraWrapper(Process):
                 self.messagesQueue.put_nowait(str(e))
                 self.exceptionsQueue.put_nowait(e)
                 self.initialized = False
-        # Stop initialization because the camera type could be recognized
+        # Stop initialization because the camera type couldn't be recognized
         else:
             self.cameraReference = None
             self.messagesToCaller.put_nowait("The specified type of the camera hasn't been implemented")
@@ -78,6 +85,8 @@ class CameraWrapper(Process):
         # !!! Below - initialization code for the PCO camera, because in the __init__() method it's impossible to make,
         # because the handle returned by the call pco.Camera() is the not pickleable object
         if self.camera_type == "PCO":
+            # Since the import of the pco library already has been tested above, again import for availability:
+            import pco
             try:
                 self.cameraReference = pco.Camera(debuglevel='none')  # open connection to the camera with some default mode
                 # printing statement won't be redirected to stdout, thus sending this message to the queue
@@ -93,13 +102,9 @@ class CameraWrapper(Process):
                 self.max_width = self.cameraReference.sdk.get_sizes()['y max']
                 self.max_height = self.cameraReference.sdk.get_sizes()['x max']
                 self.messagesToCaller.put_nowait("Camera max width / height: " + str((self.max_width, self.max_height)))  # DEBUG
-                # self.messagesToCaller.put_nowait("Camera ROI constraints " + str(self.cameraReference.sdk.get_camera_description()))  # DEBUG
+                # self.messagesToCaller.put_nowait("Camera ROI constraints " + str(self.cameraReference.sdk.get_camera_description()))
                 self.initialized = True  # Additional flag for the start the loop in the run method
                 self.imagesQueue.put_nowait("The PCO camera initialized")
-            except ImportError as import_err:
-                self.messagesToCaller.put_nowait("The PCO library is unavailable, check the installation. The camera not initialized!")
-                self.cameraReference = None
-                self.exceptionsQueue.put_nowait(import_err)
             except ValueError:
                 self.messagesToCaller.put_nowait("CAMERA NOT INITIALIZED! THE HANDLE TO IT - 'NONE'")  # Only for debugging
                 self.imagesQueue.put_nowait("The Simulated PCO camera initialized")  # Notify the main GUI about initialization
