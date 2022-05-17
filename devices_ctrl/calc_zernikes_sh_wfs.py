@@ -9,7 +9,7 @@ According to the doctoral thesis by Antonello, J. (2014): https://doi.org/10.423
 @license: GPLv3
 """
 
-# %% Imports and globals
+# %% Imports - global dependecies (from standard library and installed by conda / pip)
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import io
@@ -19,11 +19,21 @@ from skimage.feature import peak_local_max
 import time
 from matplotlib.patches import Rectangle, Circle
 from scipy import ndimage
-from zernike_pol_calc import (radial_polynomial, radial_polynomial_derivative_dr, triangular_function,
-                              triangular_derivative_dtheta, normalization_factor,
-                              tabular_radial_polynomial, tabular_radial_derivative_dr)  # for speeding up calculations
 from numpy.linalg import lstsq
+from pathlib import Path
 plt.close('all')
+
+# %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
+if __name__ == "__main__" or __name__ == Path(__file__).stem:
+    # Actual call as the standalone module or from other module from this package (as a dependecy)
+    from zernike_pol_calc import (radial_polynomial, radial_polynomial_derivative_dr, triangular_function,
+                                  triangular_derivative_dtheta, normalization_factor,
+                                  tabular_radial_polynomial, tabular_radial_derivative_dr)
+    # tabular functions  -for speeding up calculations (avoid using the recursion algorithm)
+else:  # relative imports for resolving these dependencies in the case of import as module from a package
+    from .zernike_pol_calc import (radial_polynomial, radial_polynomial_derivative_dr, triangular_function,
+                                   triangular_derivative_dtheta, normalization_factor,
+                                   tabular_radial_polynomial, tabular_radial_derivative_dr)
 
 
 # %% Function definitions

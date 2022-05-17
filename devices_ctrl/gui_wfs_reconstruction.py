@@ -10,7 +10,7 @@ many recorded images, stored locally.
 
 """
 
-# %% Imports
+# %% Imports - global dependecies (from standard library and installed by conda / pip)
 import tkinter as tk
 from tkinter.ttk import Progressbar
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # import canvas container from matplotlib for tkinter
@@ -20,13 +20,26 @@ import numpy as np
 import os
 from skimage import io
 from skimage.util import img_as_ubyte
-from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
-                                          get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
-                                          get_zernike_order_from_coefficients_number)
 import re
 from queue import Queue, Empty
-from calc_zernikes_sh_wfs import get_polynomials_coefficients
-from zernike_pol_calc import get_plot_zps_polar
+from pathlib import Path
+
+# %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
+print(__name__)  # inspection of called signature
+if __name__ == "__main__" or __name__ == Path(__file__).stem:
+    # Actual call as the standalone module or from other module from this package (as a dependecy)
+    # Note that in this case this module is aware only about modules / packages in the same folder
+    from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
+                                              get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
+                                              get_zernike_order_from_coefficients_number)
+    from calc_zernikes_sh_wfs import get_polynomials_coefficients
+    from zernike_pol_calc import get_plot_zps_polar
+else:  # relative imports for resolving these dependencies in the case of import as module from a package
+    from .reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
+                                               get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
+                                               get_zernike_order_from_coefficients_number)
+    from .calc_zernikes_sh_wfs import get_polynomials_coefficients
+    from .zernike_pol_calc import get_plot_zps_polar
 
 
 # %% Reconstructor GUI
@@ -875,6 +888,19 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         """
         if self.camera_ctrl_window is None:
             self.calibrate_window = tk.Toplevel(master=self); self.calibrate_window.geometry("+700+70")
+
+
+# %% External call for launch user interface
+def launch():
+    """
+    Launch the UI application upon the call.
+
+    Returns
+    -------
+    None.
+
+    """
+    rootTk = tk.Tk(); gui = ReconstructionUI(rootTk); gui.mainloop()
 
 
 # %% Main launch

@@ -6,12 +6,15 @@ Calculation of Zernike polynomials, plot their surface maps on the unit aperture
 @license: GPLv3
 
 """
-# %% Imports and globals
+# %% Imports - global dependecies (from standard library and installed by conda / pip)
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 from matplotlib import cm
 plt.close('all')  # closing all opened and pending figures
+
+# %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
+# it's basis module used in many other places
 
 
 # %% Functions definitions
