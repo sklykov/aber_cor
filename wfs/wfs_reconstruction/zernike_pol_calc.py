@@ -14,7 +14,7 @@ from matplotlib import cm
 plt.close('all')  # closing all opened and pending figures
 
 # %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
-# it's basis module used in many other places
+# this module is basis and called (imported) only from other modules
 
 
 # %% Functions definitions

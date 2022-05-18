@@ -3,13 +3,10 @@ docs/
 documentation/
 Docs/
 SimUscope/*.tiff  # testing acquisitions / file saving
-# ZernikePolynomials/icons
 
 # Driver libraries for the device (below) - not public yet
-devices_ctrl/ampcom
-devices_ctrl/ampcom_pt
-devices_ctrl/getvolt
-devices_ctrl/gui_ctrl_zernikes_sim.py
+/dpp_ctrl/*
+dpp_ctrl/*
 
 # Specifics from PyCharm
 .idea/

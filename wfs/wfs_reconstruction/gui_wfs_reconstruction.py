@@ -2,11 +2,15 @@
 """
 GUI for perform wavefront reconstruction.
 
-It can be used for test of implemented algorithm (see description in called functions) on
-many recorded images, stored locally.
+This script is used for testing of the wavefront reconstruction algorithm (see reference) on the images from
+Shack-Hartmann sensor.
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3 (check https://www.gnu.org/licenses/ )
+@author: Sergei Klykov (GitHub: @ssklykov).
+@license: GPLv3 (check https://www.gnu.org/licenses/ ).
+
+Reference
+---------
+    Antonello, J. (2014): https://doi.org/10.4233/uuid:f98b3b8f-bdb8-41bb-8766-d0a15dae0e27
 
 """
 
@@ -23,6 +27,8 @@ from skimage.util import img_as_ubyte
 import re
 from queue import Queue, Empty
 from pathlib import Path
+import platform
+import ctypes
 
 # %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
 print(__name__)  # inspection of called signature
@@ -890,7 +896,20 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibrate_window = tk.Toplevel(master=self); self.calibrate_window.geometry("+700+70")
 
 
-# %% External call for launch user interface
+# %% External call for launch user interface and fix of blurriness on Windows
+def correct_blur_on_windows():
+    """
+    Fix the issue with blurring if the script is launched on Windows.
+
+    Returns
+    -------
+    None.
+
+    """
+    if platform.system() == "Windows":
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+
+
 def launch():
     """
     Launch the UI application upon the call.
@@ -900,11 +919,13 @@ def launch():
     None.
 
     """
+    correct_blur_on_windows()
     rootTk = tk.Tk(); gui = ReconstructionUI(rootTk); gui.mainloop()
 
 
 # %% Main launch
 if __name__ == "__main__":
+    correct_blur_on_windows()
     rootTk = tk.Tk()  # toplevel widget of Tk there the class - child of tk.Frame is embedded
     reconstructor_gui = ReconstructionUI(rootTk)
     reconstructor_gui.mainloop()
