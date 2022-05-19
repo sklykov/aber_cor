@@ -5,8 +5,8 @@ Docs/
 SimUscope/*.tiff  # testing acquisitions / file saving
 
 # Driver libraries for the device (below) - not public yet
-/dpp_ctrl/*
-dpp_ctrl/*
+/dpp/*
+dpp/*
 
 # Specifics from PyCharm
 .idea/

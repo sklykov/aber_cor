@@ -31,7 +31,7 @@ import platform
 import ctypes
 
 # %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
-print(__name__)  # inspection of called signature
+print("Calling signature:", __name__)  # inspection of called signature
 if __name__ == "__main__" or __name__ == Path(__file__).stem:
     # Actual call as the standalone module or from other module from this package (as a dependecy)
     # Note that in this case this module is aware only about modules / packages in the same folder
@@ -56,7 +56,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Basic initialization of class variables
         super().__init__(master)  # initialize the toplevel widget
         self.master.title("UI for reconstruction of recorded wavefronts")
-        self.master.geometry("+50+70")  # opens the main window with some offset
+        self.master.geometry("+40+40")  # opens the main window with some offset from top screen coordinates
         self.config(takefocus=True)   # make created window in focus
         self.calibrate_window = None  # holder for checking if the window created
         self.calibrate_axes = None  # the class for plotting in figure loaded pictures
@@ -73,15 +73,19 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.reconstruction_window = None  # holder for the top-level window representing the loaded picture
         self.reconstruction_axes = None; self.reconstruction_plots = None
         self.camera_ctrl_window = None  # holder for the top-level window controlling a camera
+        self.default_font = tk.font.nametofont("TkDefaultFont")
 
         # Buttons and labels specification
-        self.load_button = tk.Button(master=self, text="Load Aber.Picture", command=self.load_aberrated_picture)
-        self.load_button.config(state="disabled")
+        self.load_aber_pic_button = tk.Button(master=self, text="Load Aber.Picture", command=self.load_aberrated_picture)
+        self.load_aber_pic_button.config(state="disabled")
         self.calibrate_button = tk.Button(master=self, text="Calibrate", command=self.calibrate)
-        self.path_int_matrix = tk.StringVar()
-        self.label_integral_matrix = tk.Label(master=self, textvariable=self.path_int_matrix, anchor=tk.CENTER)
-        self.default_path_label = tk.Label(master=self, text="Default path to calibration files:", anchor=tk.CENTER)
+        # Display the default searching path
+        self.default_path_display = tk.Text(master=self, height=3, width=45, wrap=tk.CHAR,
+                                            font=(self.default_font.actual()['family'], self.default_font.actual()['size']))
+        self.default_path_display.insert('end', "Default path to calibration files: \n", ('header path',))
+        self.default_path_display.tag_config('header path', justify=tk.CENTER)
         self.current_path = os.path.dirname(__file__); self.calibration_path = os.path.join(self.current_path, "calibrations")
+        # Buttons and labels
         self.load_spots_button = tk.Button(master=self, text="Load Focal Spots", command=self.load_found_spots)
         self.load_integral_matrix_button = tk.Button(master=self, text="Load Integral Matrix", command=self.load_integral_matrix)
         self.spots_text = tk.StringVar(); self.integralM_text = tk.StringVar()  # text variables
@@ -91,19 +95,19 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.live_stream_button = tk.Button(master=self, text="Live IDS camera", command=self.start_live_stream)
 
         # Grid layout for placing buttons, labels, etc.
-        pad = 4  # specification of additional space between widgets in the grid layout
-        self.load_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)  # Load Button
-        self.calibrate_button.grid(row=0, rowspan=1, column=5, columnspan=1, padx=pad, pady=pad)  # Calibrate Button
-        self.label_integral_matrix.grid(row=1, rowspan=1, column=2, columnspan=3, padx=pad, pady=pad)  # Text about default path
-        self.default_path_label.grid(row=0, rowspan=1, column=2, columnspan=3, padx=pad, pady=pad)  # Represent the default path
+        self.pad = 4  # specification of additional space between widgets in the grid layout
+        self.load_aber_pic_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)  # Load Button
+        self.calibrate_button.grid(row=0, rowspan=1, column=5, columnspan=1, padx=self.pad, pady=self.pad)  # Calibrate Button
+        self.default_path_display.grid(row=0, rowspan=2, column=2, columnspan=3, padx=self.pad, pady=self.pad)
         # Load calibration file with focal spots:
-        self.load_spots_button.grid(row=2, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+        self.load_spots_button.grid(row=2, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)
         # Load calibration file with integral matrix:
-        self.load_integral_matrix_button.grid(row=3, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
-        self.spots_label.grid(row=2, rowspan=1, column=2, columnspan=3, padx=pad, pady=pad)
-        self.integralM_label.grid(row=3, rowspan=1, column=2, columnspan=3, padx=pad, pady=pad)
-        self.live_stream_button.grid(row=3, rowspan=1, column=5, columnspan=1, padx=pad, pady=pad)
-        self.grid()  # pack all buttons and labels
+        self.load_integral_matrix_button.grid(row=3, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)
+        self.spots_label.grid(row=2, rowspan=1, column=2, columnspan=3, padx=self.pad, pady=self.pad)
+        self.integralM_label.grid(row=3, rowspan=1, column=2, columnspan=3, padx=self.pad, pady=self.pad)
+        self.live_stream_button.grid(row=3, rowspan=1, column=5, columnspan=1, padx=self.pad, pady=self.pad)
+        self.grid(); self.master.update()  # pack all buttons and labels
+        self.master_geometry = self.master.winfo_geometry()  # saves the main window geometry
 
     def set_default_path(self):
         """
@@ -115,7 +119,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if os.path.exists(self.calibration_path) and os.path.isdir(self.calibration_path):
-            self.path_int_matrix.set(self.calibration_path)
+            self.default_path_display.insert('end', (self.calibration_path))
             self.spots_path = os.path.join(self.calibration_path, "detected_focal_spots.npy")
             self.integralM_path = os.path.join(self.calibration_path, "integral_calibration_matrix.npy")
             if os.path.exists(self.spots_path):
@@ -135,9 +139,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             else:
                 self.integralM_text.set("No default calibration file with integral matrix found")
             if self.activate_load_aber_pic_count == 2:
-                self.load_button.config(state="normal")
+                self.load_aber_pic_button.config(state="normal")
         else:
-            self.path_int_matrix.set(self.current_path)
+            self.default_path_display.insert('end', (self.current_path + "\n"))
             self.spots_text.set("No default calibration file with spots found")
             self.integralM_text.set("No default calibration file with integral matrix found")
 
@@ -168,16 +172,20 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if self.calibrate_window is None:  # create the toplevel widget for holding all ctrls for calibration
-            # Toplevel window configuration
-            self.calibrate_window = tk.Toplevel(master=self); self.calibrate_window.geometry("+720+70")
+            # Toplevel window configuration for calibration - relative to the main window
+            # shift of Toplevel window vertically
+            y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window vertically
+            # shift of Toplevel window horizontally
+            x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad
+            self.calibrate_window = tk.Toplevel(master=self); self.calibrate_window.geometry(f'+{x_shift}+{y_shift}')
             self.calibrate_window.protocol("WM_DELETE_WINDOW", self.calibration_exit)  # associate quit with the function
             self.calibrate_button.config(state="disabled")  # disable the Calibrate button
-            self.calibrate_window.title("Calibration"); self.load_button.config(state="disabled")
+            self.calibrate_window.title("Calibration"); self.load_aber_pic_button.config(state="disabled")
 
             # Buttons specification for calibration
             pad = 4  # universal additional distance between buttons on grid layout
-            self.calibrate_load_button = tk.Button(master=self.calibrate_window, text="Load recorded spots",
-                                                   command=self.load_picture)
+            self.calibrate_load_spots_button = tk.Button(master=self.calibrate_window, text="Load recorded spots",
+                                                         command=self.load_picture)
             self.calibrate_localize_button = tk.Button(master=self.calibrate_window, text="Localize focal spots",
                                                        command=self.localize_spots)
             self.calibrate_localize_button.config(state="disabled")
@@ -239,7 +247,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibrate_fig_widget = self.calibrate_canvas.get_tk_widget()
 
             # Layout of widgets on the calibration window
-            self.calibrate_load_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+            self.calibrate_load_spots_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
             self.calibrate_localize_button.grid(row=0, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
             self.threshold_frame.grid(row=0, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
             self.radius_frame.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
@@ -275,7 +283,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if not self.messages_queue.empty():
                 self.messages_queue.queue.clear()  # clear all messages from the messages queue
             self.calibrate_window.destroy(); self.calibrate_window = None
-        self.load_button.config(state="normal")  # activate the load picture button
+        self.load_aber_pic_button.config(state="normal")  # activate the load picture button
 
     def load_picture(self):
         """
@@ -407,7 +415,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         """
         self.redraw_loaded_image()  # call for refreshing image without plotted CoMs and sub-apertures
         self.activate_load_aber_pic_count = 0  # dis-activate the possibility to load aberrated picture before calibration complete
-        self.load_button.config(state="disabled")
+        self.load_aber_pic_button.config(state="disabled")
         (self.coms_spots, self.theta0, self.rho0,
          self.integration_limits) = get_integral_limits_nonaberrated_centers(self.calibrate_axes,
                                                                              self.loaded_image,
@@ -564,13 +572,13 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             rows, cols = self.coms_spots.shape
             if rows > 0 and cols > 0:
                 # below - force the user to load the integral matrix again, if the file with spots reloaded
-                self.load_button.config(state="disabled")
+                self.load_aber_pic_button.config(state="disabled")
                 if self.activate_load_aber_pic_count == 0 or self.activate_load_aber_pic_count == 1:
                     self.activate_load_aber_pic_count += 1
                 elif self.activate_load_aber_pic_count == 2:
                     self.activate_load_aber_pic_count -= 1
             if self.activate_load_aber_pic_count == 2:
-                self.load_button.config(state="normal")
+                self.load_aber_pic_button.config(state="normal")
 
     def load_integral_matrix(self):
         """
@@ -594,13 +602,13 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             rows, cols = self.integral_matrix.shape
             if rows > 0 and cols > 0:
                 # below - force the user to load the integral matrix again, if the file with spots reloaded
-                self.load_button.config(state="disabled")
+                self.load_aber_pic_button.config(state="disabled")
                 if self.activate_load_aber_pic_count == 0 or self.activate_load_aber_pic_count == 1:
                     self.activate_load_aber_pic_count += 1
                 elif self.activate_load_aber_pic_count == 2:
                     self.activate_load_aber_pic_count -= 1
             if self.activate_load_aber_pic_count == 2:
-                self.load_button.config(state="normal")
+                self.load_aber_pic_button.config(state="normal")
 
     def load_aberrated_picture(self):
         """
@@ -631,8 +639,13 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if rows > 0 and cols > 0:
                 # construct the toplevel window
                 if self.reconstruction_window is None:  # create the toplevel widget for holding all ctrls for calibration
-                    # Toplevel window configuration
-                    self.reconstruction_window = tk.Toplevel(master=self); self.reconstruction_window.geometry("+710+70")
+                    # Toplevel window configuration for reconstruction - relative to the main window
+                    # shift of Toplevel window vertically
+                    y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window vertically
+                    # shift of Toplevel window horizontally
+                    x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad
+                    self.reconstruction_window = tk.Toplevel(master=self)
+                    self.reconstruction_window.geometry(f'+{x_shift}+{y_shift}')
                     self.reconstruction_window.protocol("WM_DELETE_WINDOW", self.reconstruction_exit)
                     self.calibrate_button.config(state="disabled")  # disable the Calibrate button
                     self.reconstruction_window.title("Reconstruction"); pad = 4
@@ -910,6 +923,18 @@ def correct_blur_on_windows():
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
 
 
+def print_short_license_note():
+    """
+    Print out the GPLv3 short notification.
+
+    Returns
+    -------
+    None.
+
+    """
+    print("'Wavefront reconstruction GUI' Copyright (C) 2022  Sergei Klykov (according to GPLv3)")
+
+
 def launch():
     """
     Launch the UI application upon the call.
@@ -919,13 +944,13 @@ def launch():
     None.
 
     """
-    correct_blur_on_windows()
+    correct_blur_on_windows(); print_short_license_note()  # initial functions
     rootTk = tk.Tk(); gui = ReconstructionUI(rootTk); gui.mainloop()
 
 
 # %% Main launch
 if __name__ == "__main__":
-    correct_blur_on_windows()
+    correct_blur_on_windows(); print_short_license_note()  # initial functions
     rootTk = tk.Tk()  # toplevel widget of Tk there the class - child of tk.Frame is embedded
     reconstructor_gui = ReconstructionUI(rootTk)
     reconstructor_gui.mainloop()
