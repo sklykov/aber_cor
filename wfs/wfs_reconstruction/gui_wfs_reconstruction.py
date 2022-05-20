@@ -16,6 +16,7 @@ Reference
 
 # %% Imports - global dependecies (from standard library and installed by conda / pip)
 import tkinter as tk
+from tkinter import font
 from tkinter.ttk import Progressbar
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # import canvas container from matplotlib for tkinter
 import matplotlib.figure as plot_figure
@@ -73,7 +74,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.reconstruction_window = None  # holder for the top-level window representing the loaded picture
         self.reconstruction_axes = None; self.reconstruction_plots = None
         self.camera_ctrl_window = None  # holder for the top-level window controlling a camera
-        self.default_font = tk.font.nametofont("TkDefaultFont")
+        self.default_font = font.nametofont("TkDefaultFont")
 
         # Buttons and labels specification
         self.load_aber_pic_button = tk.Button(master=self, text="Load Aber.Picture", command=self.load_aberrated_picture)

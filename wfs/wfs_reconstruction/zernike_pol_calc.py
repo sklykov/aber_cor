@@ -254,7 +254,8 @@ def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: f
     #     axes = figure.add_subplot(projection='polar')  # axes - the handle for drawing functions
     # !!!: using contourf function is too slow for providing refreshing upon calling by the button
     axes.grid(False)  # demanded by pcolormesh function, if not called - deprecation warning
-    im = axes.pcolormesh(Theta, R, S, cmap=cm.coolwarm)  # plot the colour map by using the Z map according to Theta, R coord-s
+    # plot the colour map by using the Z map according to Theta, R coordinates
+    im = axes.pcolormesh(Theta, R, S, cmap=cm.coolwarm, shading='nearest')  # should fix deprecation complain
     axes.axis('off')  # off polar coordinate axes
     axes.set_theta_direction(-1)  # the counterclockwise counting of angle switched to clockwise!
     if show_amplitudes:
