@@ -29,7 +29,7 @@ class CheckMessagesForExceptions(Thread):
 
     def run(self):
         """
-        Check constantly in the while loop the Queue for presence of exceptions and if found, call the "Quit" function of the main window.
+        Check constantly in the loop the Queue for presence of exceptions and if found, call the "Quit" function of the main window.
 
         Returns
         -------

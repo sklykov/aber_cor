@@ -12,7 +12,7 @@ with open("README.md", "r", encoding="utf-8") as readme_info:
     long_description = readme_info.read()
 
 setup(name="wavefront_reconstruction",
-      version="0.0.2.dev1", license="GPLv3",
+      version="0.0.3.dev1", license="GPLv3",
       license_files=['LICENSE'],
       url="https://github.com/ssklykov/aber_cor/tree/main/wfs",
       download_url="https://github.com/ssklykov/aber_cor/tree/main/wfs/for_wheel",

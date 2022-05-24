@@ -18,7 +18,7 @@ Reference
 import tkinter as tk
 from tkinter import font
 from tkinter.ttk import Progressbar
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # import canvas container from matplotlib for tkinter
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.figure as plot_figure
 import time
 import numpy as np
@@ -30,10 +30,13 @@ from queue import Queue, Empty
 from pathlib import Path
 import platform
 import ctypes
+from multiprocessing import Queue as mpQueue
 
 # %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
 print("Calling signature:", __name__)  # inspection of called signature
-if __name__ == "__main__" or __name__ == Path(__file__).stem:
+if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__mp_main__":
+    # ???: Last condition arised because of attempt to reload modules then additional Process launched, seems
+
     # Actual call as the standalone module or from other module from this package (as a dependecy)
     # Note that in this case this module is aware only about modules / packages in the same folder
     from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
@@ -41,12 +44,15 @@ if __name__ == "__main__" or __name__ == Path(__file__).stem:
                                               get_zernike_order_from_coefficients_number)
     from calc_zernikes_sh_wfs import get_polynomials_coefficients
     from zernike_pol_calc import get_plot_zps_polar
+    import camera as cam  # for accessing controlling wrapper for the cameras (simulated and IDS)
 else:  # relative imports for resolving these dependencies in the case of import as module from a package
     from .reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
                                                get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
                                                get_zernike_order_from_coefficients_number)
     from .calc_zernikes_sh_wfs import get_polynomials_coefficients
     from .zernike_pol_calc import get_plot_zps_polar
+    from . import camera as cam   # for accessing controlling wrapper for the cameras (simulated and IDS)
+    print("Implicit usage of camera module, list of importable modules: ", cam.__all__)
 
 
 # %% Reconstructor GUI
@@ -93,7 +99,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.spots_label = tk.Label(master=self, textvariable=self.spots_text, anchor=tk.CENTER)
         self.integralM_label = tk.Label(master=self, textvariable=self.integralM_text, anchor=tk.CENTER)
         self.set_default_path()  # calling the method for resolving the standard path for calibrations
-        self.live_stream_button = tk.Button(master=self, text="Live IDS camera", command=self.start_live_stream)
+        self.live_stream_button = tk.Button(master=self, text="Live Camera", command=self.start_live_stream)
 
         # Grid layout for placing buttons, labels, etc.
         self.pad = 4  # specification of additional space between widgets in the grid layout
@@ -173,11 +179,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if self.calibrate_window is None:  # create the toplevel widget for holding all ctrls for calibration
-            # Toplevel window configuration for calibration - relative to the main window
-            # shift of Toplevel window vertically
-            y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window vertically
-            # shift of Toplevel window horizontally
-            x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad
+            # Toplevel window configuration for calibration - relative to the main  (actual position!)
+            y_shift = self.master.winfo_geometry().split("+")[2]  # vertical shift
+            x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad  # horizontal shift
             self.calibrate_window = tk.Toplevel(master=self); self.calibrate_window.geometry(f'+{x_shift}+{y_shift}')
             self.calibrate_window.protocol("WM_DELETE_WINDOW", self.calibration_exit)  # associate quit with the function
             self.calibrate_button.config(state="disabled")  # disable the Calibrate button
@@ -640,11 +644,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if rows > 0 and cols > 0:
                 # construct the toplevel window
                 if self.reconstruction_window is None:  # create the toplevel widget for holding all ctrls for calibration
-                    # Toplevel window configuration for reconstruction - relative to the main window
-                    # shift of Toplevel window vertically
-                    y_shift = self.master.winfo_geometry().split("+")[2]  # shift of Toplevel window vertically
-                    # shift of Toplevel window horizontally
-                    x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad
+                    # Toplevel window configuration for reconstruction - relative to the main window actual position!
+                    y_shift = self.master.winfo_geometry().split("+")[2]  # vertical shift
+                    x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad  # horizontal shift
                     self.reconstruction_window = tk.Toplevel(master=self)
                     self.reconstruction_window.geometry(f'+{x_shift}+{y_shift}')
                     self.reconstruction_window.protocol("WM_DELETE_WINDOW", self.reconstruction_exit)
@@ -895,7 +897,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.calibrate_button.config(state="normal")
         self.reconstruction_window.destroy(); self.reconstruction_window = None
 
-    # %% Camera control for making snapshots
+    # %% Wavefront sensor Camera ctrl
     # recorded wavefront profiles from a Shack-Hartmann sensor
     def start_live_stream(self):
         """
@@ -907,10 +909,57 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if self.camera_ctrl_window is None:
-            self.calibrate_window = tk.Toplevel(master=self); self.calibrate_window.geometry("+700+70")
+            # Toplevel window configuration for calibration - relative to the main window actual position!
+            y_shift = self.master.winfo_geometry().split("+")[2]  # vertical shift
+            x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad  # horizontal shift
+            self.camera_ctrl_window = tk.Toplevel(master=self); self.camera_ctrl_window.geometry(f'+{x_shift}+{y_shift}')
+            self.camera_ctrl_window.protocol("WM_DELETE_WINDOW", self.camera_ctrl_exit)
 
 
-# %% External call for launch user interface and fix of blurriness on Windows
+            # Buttons creation
+
+            # Figure associated with live frame
+            self.default_frame_figure = 6.0  # default figure size (in inches)
+            self.frame_figure = plot_figure.Figure(figsize=(self.default_frame_figure, self.default_frame_figure))
+            self.canvas = FigureCanvasTkAgg(self.frame_figure, master=self.camera_ctrl_window); self.canvas.draw()
+            self.frame_widget = self.canvas.get_tk_widget()
+            self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
+            self.plot_toolbar.update()
+
+            # Camera Initialization
+            self.messages2Camera = mpQueue(maxsize=10)  # Initialize message queue for communication with the camera
+            self.camera_messages = mpQueue(maxsize=10)  # Initialize message queue for listening messages from the camera
+            self.exceptions_queue = mpQueue(maxsize=5)  # Initialize separate queue for handling Exceptions
+            self.images_queue = mpQueue(maxsize=40)  # Initialize the queue for holding acquired images
+            self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
+            self.exposure_t_ms = 100
+            self.image_height = 1000; self.image_width = 1000
+            self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
+                                                                self.images_queue, self.camera_messages,
+                                                                self.exposure_t_ms, self.image_width, self.image_height)
+            self.camera_handle.start(); self.camera_handle.snap_single_image()
+            image = self.images_queue.get(); self.frame_figure_axes = self.frame_figure.add_subplot()
+            self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
+            self.frame_figure_axes.imshow(image, cmap='gray'); self.canvas.draw()
+
+            # Grid layout of all widgets
+            pad = 4
+            self.plot_toolbar.grid(row=0, rowspan=1, column=3, columnspan=2, padx=pad, pady=pad)
+            self.frame_widget.grid(row=1, rowspan=5, column=0, columnspan=5, padx=pad, pady=pad)
+
+    def camera_ctrl_exit(self):
+        """
+        Handle the closing event for camera control window (additional Top-level window).
+
+        Returns
+        -------
+        None.
+
+        """
+        self.camera_ctrl_window.destroy(); self.camera_ctrl_window = None
+
+
+# %% Launch settings
 def correct_blur_on_windows():
     """
     Fix the issue with blurring if the script is launched on Windows.
