@@ -20,6 +20,7 @@ from tkinter import font
 from tkinter.ttk import Progressbar
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.figure as plot_figure
+import matplotlib as mpl
 import time
 import numpy as np
 import os
@@ -31,6 +32,7 @@ from pathlib import Path
 import platform
 import ctypes
 from multiprocessing import Queue as mpQueue
+from threading import Thread
 
 # %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
 print("Calling signature:", __name__)  # inspection of called signature
@@ -99,7 +101,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.spots_label = tk.Label(master=self, textvariable=self.spots_text, anchor=tk.CENTER)
         self.integralM_label = tk.Label(master=self, textvariable=self.integralM_text, anchor=tk.CENTER)
         self.set_default_path()  # calling the method for resolving the standard path for calibrations
-        self.live_stream_button = tk.Button(master=self, text="Live Camera", command=self.start_live_stream)
+        self.open_camera_button = tk.Button(master=self, text="Live Camera", command=self.open_camera)
 
         # Grid layout for placing buttons, labels, etc.
         self.pad = 4  # specification of additional space between widgets in the grid layout
@@ -112,7 +114,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.load_integral_matrix_button.grid(row=3, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)
         self.spots_label.grid(row=2, rowspan=1, column=2, columnspan=3, padx=self.pad, pady=self.pad)
         self.integralM_label.grid(row=3, rowspan=1, column=2, columnspan=3, padx=self.pad, pady=self.pad)
-        self.live_stream_button.grid(row=3, rowspan=1, column=5, columnspan=1, padx=self.pad, pady=self.pad)
+        self.open_camera_button.grid(row=3, rowspan=1, column=5, columnspan=1, padx=self.pad, pady=self.pad)
         self.grid(); self.master.update()  # pack all buttons and labels
         self.master_geometry = self.master.winfo_geometry()  # saves the main window geometry
 
@@ -167,6 +169,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 self.calculation_thread.join(1)  # wait 1 sec for active thread stops
         if not self.messages_queue.empty():
             self.messages_queue.queue.clear()  # clear all messages from the messages queue
+        if self.camera_ctrl_window is not None:  # perform all required for closing camera ctrl operations
+            self.camera_ctrl_exit()
 
     # %% Calibration
     def calibrate(self):
@@ -899,7 +903,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
     # %% Wavefront sensor Camera ctrl
     # recorded wavefront profiles from a Shack-Hartmann sensor
-    def start_live_stream(self):
+    def open_camera(self):
         """
         Open the additional window for controlling a camera.
 
@@ -914,9 +918,16 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad  # horizontal shift
             self.camera_ctrl_window = tk.Toplevel(master=self); self.camera_ctrl_window.geometry(f'+{x_shift}+{y_shift}')
             self.camera_ctrl_window.protocol("WM_DELETE_WINDOW", self.camera_ctrl_exit)
-
+            self.global_timeout = 0.25  # global timeout in seconds
+            self.frame_figure_axes = None; self.__flag_live_stream = False
 
             # Buttons creation
+            self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
+                                                command=self.snap_single_image)
+            self.single_snap_button.config(state="disabled")
+            self.live_stream_button = tk.Button(master=self.camera_ctrl_window, text="Start Live",
+                                                command=self.live_stream, fg='green')
+            self.live_stream_button.config(state="disabled")
 
             # Figure associated with live frame
             self.default_frame_figure = 6.0  # default figure size (in inches)
@@ -925,6 +936,18 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.frame_widget = self.canvas.get_tk_widget()
             self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
             self.plot_toolbar.update()
+
+            # Grid layout of all widgets
+            self.camera_ctrl_pad = 4
+            self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
+                                   padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.single_snap_button.grid(row=0, rowspan=1, column=1, columnspan=1,
+                                         padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.live_stream_button.grid(row=0, rowspan=1, column=2, columnspan=1,
+                                         padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.frame_widget.grid(row=1, rowspan=5, column=0, columnspan=5,
+                                   padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.camera_ctrl_window.update()
 
             # Camera Initialization
             self.messages2Camera = mpQueue(maxsize=10)  # Initialize message queue for communication with the camera
@@ -937,15 +960,126 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
                                                                 self.images_queue, self.camera_messages,
                                                                 self.exposure_t_ms, self.image_width, self.image_height)
-            self.camera_handle.start(); self.camera_handle.snap_single_image()
-            image = self.images_queue.get(); self.frame_figure_axes = self.frame_figure.add_subplot()
-            self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
-            self.frame_figure_axes.imshow(image, cmap='gray'); self.canvas.draw()
+            self.camera_handle.start()  # start associated with the camera process
+            # Wait the confirmation that camera initialized
+            camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
+            while(not camera_initialized_flag):
+                if not self.camera_messages.empty():
+                    try:
+                        message = self.camera_messages.get_nowait()
+                        print(message)
+                        if message == "Simulated camera Process has been launched":
+                            self.single_snap_button.config(state="normal")
+                            self.live_stream_button.config(state="normal")
+                            camera_initialized_flag = True; break
+                    except Empty:
+                        pass
+                else:
+                    time.sleep(self.gui_refresh_rate_ms/1000)
+            # Exceptions and messeges handling
+            self.exceptions_checker = cam.check_exception_streams.CheckMessagesForExceptions(self.exceptions_queue,
+                                                                                             self)
+            self.messages_printer = cam.check_exception_streams.MessagesPrinter(self.camera_messages)
+            self.exceptions_checker.start(); self.messages_printer.start()
 
-            # Grid layout of all widgets
-            pad = 4
-            self.plot_toolbar.grid(row=0, rowspan=1, column=3, columnspan=2, padx=pad, pady=pad)
-            self.frame_widget.grid(row=1, rowspan=5, column=0, columnspan=5, padx=pad, pady=pad)
+    def snap_single_image(self):
+        """
+        Handle acquiring and representing of a single image.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.camera_handle is not None:
+            if not(self.messages2Camera.full()):
+                self.messages2Camera.put_nowait("Snap single image")  # Send the command for acquiring single image
+                # timeout to wait the image on the imagesQueue
+                timeout_wait = 105
+                try:
+                    image = self.images_queue.get(block=True, timeout=(timeout_wait/1000))  # Waiting then image will be available
+                except Empty:
+                    image = None
+                    print("The snap image not acquired, timeout reached")
+                # Represent image on the figure (associated widget)
+                if not(isinstance(image, str)) and (image is not None):
+                    self.show_image(image)
+                if isinstance(image, str):
+                    print("Image: ", image)  # replacer for IDS simulation
+
+    def live_stream(self):
+        """
+        Start and show live image stream.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.__flag_live_stream = not self.__flag_live_stream   # changing the state of the flag
+        if self.__flag_live_stream:
+            self.live_stream_button.config(text="Stop Live", fg='red')
+            self.plot_toolbar.destroy()
+            # FIXME: now everything works if only snap single image performed before
+            self.i = 0
+            self.frame_figure_axes.mouseover = False  # disable tracing mouse
+            self.imshowing.set_animated(True)
+            self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
+            self.image_updater = Thread(target=self.update_image, args=())  # assign updating of images to the evoked Thread
+            self.image_updater.start()  # start the Thread and assigned to it task
+        else:
+            if not(self.messages2Camera.full()):
+                self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
+            self.live_stream_button.config(text="Start Live", fg='green')
+            self.frame_figure_axes.mouseover = True  # enable tracing mouse
+            self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
+            self.plot_toolbar.update(); self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
+                                                               padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+
+    def update_image(self):
+        time.sleep(1.25*self.exposure_t_ms/1000)
+        delay = 1.04*self.exposure_t_ms
+        while(self.__flag_live_stream):
+            t1 = time.perf_counter()
+            try:
+                image = self.images_queue.get_nowait()
+                if not(isinstance(image, str)) and (image is not None):
+                    self.show_image(image)
+            except Empty:
+                pass
+            time.sleep(delay/1000)
+            t2 = time.perf_counter()
+            print("Image showing takes:", round((t2-t1)*1000))
+
+    def show_image(self, image: np.ndarray):
+        """
+        Show image on the figure (widget).
+
+        Parameters
+        ----------
+        image : np.ndarray
+            Acquired / simulated image.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.frame_figure_axes is None:
+            self.frame_figure_axes = self.frame_figure.add_subplot()
+            self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
+        if not self.__flag_live_stream:
+            # self.frame_figure_axes.imshow(image, cmap='gray'); self.canvas.draw()
+            # !!! function below returns matplotlib.image.AxesImage class
+            self.imshowing = self.frame_figure_axes.imshow(image, cmap='gray', interpolation='none',
+                                                           vmin=0, vmax=255)
+            self.imshowing.set_animated(False); self.canvas.draw()
+        else:
+            # !!! Important - set data for AxesImage for updating image content
+            # AND calling backend canvas for re-drawing of updated image in the idle state, that is
+            # more effective then call self.canvas.draw()
+            self.imshowing.set_data(image)
+            self.canvas.draw_idle()
 
     def camera_ctrl_exit(self):
         """
@@ -956,6 +1090,22 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
+        if self.camera_handle is not None:
+            # Send the message to stop the imaging and deinitialize the camera:
+            self.messages2Camera.put_nowait("Close the camera")
+            if self.camera_handle.is_alive():  # if the threaded associated with the camera process hasn't been finished
+                self.camera_handle.join(timeout=self.global_timeout)  # wait the camera closing / deinitializing
+                self.camera_handle = None  # explicitly setting the handle to None for preventing again checking if it's alive
+                print("Camera process released")
+        if self.exceptions_checker.is_alive():
+            self.exceptions_queue.put_nowait("Stop Exception Checker")
+            # The problem is here, that Thread below somehow waits for exit action, so
+            # this Thread cannot be joined in the main thread, therefore
+            # self.exceptions_checker.join() deleted from here
+        if self.messages_printer.is_alive():
+            self.camera_messages.put_nowait("Stop Messages Printer")
+            self.messages_printer.join()
+            print("Messages Printer stopped")
         self.camera_ctrl_window.destroy(); self.camera_ctrl_window = None
 
 

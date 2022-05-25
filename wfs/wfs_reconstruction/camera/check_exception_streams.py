@@ -20,11 +20,11 @@ class CheckMessagesForExceptions(Thread):
     If any exception is caught, then the Quit or Exit button will be clicked.
     """
 
-    def __init__(self, messages_queue: Queue, quitButton, period_checks_ms: int = 100):
+    def __init__(self, messages_queue: Queue, root_window, period_checks_ms: int = 100):
         self.messages_queue = messages_queue; self.period_checks_ms = period_checks_ms
         if self.period_checks_ms < 5:
             self.period_checks_ms = 5  # minimal delay between checks = 5 ms
-        self.quitButton = quitButton
+        self.root_window = root_window
         Thread.__init__(self)
 
     def run(self):
@@ -36,7 +36,7 @@ class CheckMessagesForExceptions(Thread):
         None.
 
         """
-        running = True; quitMainProgram = False
+        running = True; quit_flag = False
         while running:
             if not(self.messages_queue.empty()) and (self.messages_queue.qsize() > 0):
                 try:
@@ -44,7 +44,7 @@ class CheckMessagesForExceptions(Thread):
                     if isinstance(message, Exception):  # caught the exception
                         print("Encountered and handled exception: ", message)
                         # Should evoke all operations associated with clicked Quit button on the main window
-                        running = False; quitMainProgram = True
+                        running = False; quit_flag = True
                         break
                     if isinstance(message, str):  # normal ending the running task
                         if message == "Stop Exception Checker" or message == "Stop" or message == "Stop Program":
@@ -56,8 +56,9 @@ class CheckMessagesForExceptions(Thread):
                     pass
             time.sleep(self.period_checks_ms/1000)  # Artificial delays between each loop iteration
         # Only now, if the loop has been ended because of caught Exception, call from the main window quit action
-        if quitMainProgram:
-            self.quitButton.click()  # Simulate clicking on the button on the main window for stopping the GUI program
+        if quit_flag:
+            self.root_window.after(10, self.root_window.camera_ctrl_exit())  # Calling close protocol
+        print("Exceptions checker stopped")
 
 
 # %% Message printer

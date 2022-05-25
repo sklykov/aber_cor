@@ -121,6 +121,7 @@ class CameraWrapper(Process):
                                 self.exceptions_queue.put_nowait(error)  # re-throw to the main program the error
                             finally:
                                 self.initialized = False; break  # In any case stop the loop waiting the commands from the GUI
+
                         # Live stream mode
                         if message == "Start Live Stream":
                             self.messages2caller.put_nowait("Camera start live streaming")
@@ -130,20 +131,24 @@ class CameraWrapper(Process):
                                 self.messages2caller.put_nowait("Error string: " + str(error))
                                 self.messages2caller.put_nowait(str(error).split(sep=" "))
                                 self.exceptions_queue.put_nowait(error)
+
                         # Acquiring single image
                         if message == "Snap single image":
                             try:
                                 # The single acquired image is sent back to the calling controlling program via Queue
                                 self.snap_single_image()
-                                self.messages2caller.put_nowait("Single image snap performed")
+                                if not self.messages2caller.full():
+                                    self.messages2caller.put_nowait("Single image snap performed")
                             except Exception as e:
                                 # Any encountered exceptions should be reported to the main controlling program
                                 self.close()  # An attempt to close the camera
                                 self.initialized = False  # Stop this running loop
                                 self.exceptions_queue.put_nowait(e)  # Send to the main controlling program the caught Exception e
+
                         # Check and return the actual camera status
                         if message == "Get the IDS camera status":
                             self.return_camera_status()
+
                         # Restore full frame
                         if message == "Restore Full Frame":
                             self.messages2caller.put_nowait(("Full frame restored: " + str((self.max_width, self.max_height))))
@@ -254,7 +259,7 @@ class CameraWrapper(Process):
                         self.messages2caller.put_nowait("Camera stop live streaming because of the reported error")
                         if (self.camera_type == "IDS") and (self.camera_reference is not None):
                             self.camera_reference.stop()  # stop the live stream from the IDS camera
-                        self.messages_queue.put_nowait(message)  # setting for run() method again the error report for stopping the camera
+                        self.messages_queue.put_nowait(message)  # send for run() method again the error report
                         self.live_stream_flag = False; break
                 except Empty:
                     pass

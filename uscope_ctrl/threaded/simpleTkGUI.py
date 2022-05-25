@@ -18,6 +18,7 @@ import numpy as np
 flag_generation = False  # For start/stop generation of some noisy pictures
 messages = Queue(maxsize=5)
 mean_t = 0.0
+width = 2000; height = 2000  # parameters for image generation
 
 
 # %% Classes
@@ -89,7 +90,7 @@ def refresh_noise_image(imshow_img, cnvs):
     None.
 
     """
-    img = (generate_noise_picture(200, 200))  # generation noisy image
+    img = generate_noise_picture(width, height)  # generation noisy image
     imshow_img.set_data(img)  # update the content of AxesImage helpes to re-draw associated image in canvas widget
     cnvs.draw()  # Redraw the image in the canvas widget
 
@@ -178,7 +179,7 @@ def put_message(root_widget, message_queue):
 # %% Tests
 if __name__ == '__main__':
     root = tkinter.Tk(); root.title("Main window")  # top level widget
-    img = (generate_noise_picture(200, 200))  # generation noisy image
+    img = generate_noise_picture(width, height)  # generation noisy image
     figure = plt.figure("pyplot"); axes_image = plt.imshow(img, cmap='gray')  # the links to 2 pyplot classes
     plt.axis("off"); plt.tight_layout()  # removing axis from image representation
     # Packing plot in the canvas widget
