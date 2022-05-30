@@ -38,7 +38,7 @@ class CameraWrapper(Process):
         self.exposure_time_ms = exposure_t_ms  # Initializing with the default exposure time
         self.camera_type = camera_type  # Type of initialized camera
         # Initialization code for the IDS camera -> MOVED to the run() because it's impossible to pickle handle to the camera
-        if self.camera_type == "IDS":
+        if self.camera_type == "IDS camera" or self.camera_type == "IDS":
             # All the camera initialization code moved to the run() method!
             # It's because the camera handle returned by the DLL library is not pickleable by the pickle method !!!
             try:

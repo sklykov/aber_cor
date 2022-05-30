@@ -13,7 +13,7 @@ from multiprocessing import Queue as ProcessQueue
 
 
 # %% Exception checker
-class CheckMessagesForExceptions(Thread):
+class ExceptionsChecker(Thread):
     """
     Threaded class for continuous and independent loop running for checking that any Exception reported anywhere in the GUI program.
 

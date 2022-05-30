@@ -20,7 +20,6 @@ from tkinter import font
 from tkinter.ttk import Progressbar
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.figure as plot_figure
-import matplotlib as mpl
 import time
 import numpy as np
 import os
@@ -49,7 +48,8 @@ if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__m
     import camera as cam  # for accessing controlling wrapper for the cameras (simulated and IDS)
 else:  # relative imports for resolving these dependencies in the case of import as module from a package
     from .reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
-                                               get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
+                                               get_localCoM_matrix, get_coms_shifts,
+                                               get_zernike_coefficients_list,
                                                get_zernike_order_from_coefficients_number)
     from .calc_zernikes_sh_wfs import get_polynomials_coefficients
     from .zernike_pol_calc import get_plot_zps_polar
@@ -77,7 +77,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.messages_queue = Queue(maxsize=10); self.integral_matrix = np.ndarray
         self.calculation_thread = None  # holder for calculation thread of integral matrix
         self.integration_running = False  # flag for tracing the running integration
-        self.activate_load_aber_pic_count = 0  # if it is equal to 2, then both files for reconstruction can be loaded
+        self.activate_load_aber_pic_count = 0  # if it == 2, then both files for reconstruction can be loaded
         self.loaded_axes = None; self.loaded_figure = None  # holders for opening and loading figures
         self.reconstruction_window = None  # holder for the top-level window representing the loaded picture
         self.reconstruction_axes = None; self.reconstruction_plots = None
@@ -85,18 +85,22 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.default_font = font.nametofont("TkDefaultFont")
 
         # Buttons and labels specification
-        self.load_aber_pic_button = tk.Button(master=self, text="Load Aber.Picture", command=self.load_aberrated_picture)
+        self.load_aber_pic_button = tk.Button(master=self, text="Load Aber.Picture",
+                                              command=self.load_aberrated_picture)
         self.load_aber_pic_button.config(state="disabled")
         self.calibrate_button = tk.Button(master=self, text="Calibrate", command=self.calibrate)
         # Display the default searching path
         self.default_path_display = tk.Text(master=self, height=3, width=45, wrap=tk.CHAR,
-                                            font=(self.default_font.actual()['family'], self.default_font.actual()['size']))
+                                            font=(self.default_font.actual()['family'],
+                                                  self.default_font.actual()['size']))
         self.default_path_display.insert('end', "Default path to calibration files: \n", ('header path',))
         self.default_path_display.tag_config('header path', justify=tk.CENTER)
-        self.current_path = os.path.dirname(__file__); self.calibration_path = os.path.join(self.current_path, "calibrations")
+        self.current_path = os.path.dirname(__file__); self.calibration_path = os.path.join(self.current_path,
+                                                                                            "calibrations")
         # Buttons and labels
         self.load_spots_button = tk.Button(master=self, text="Load Focal Spots", command=self.load_found_spots)
-        self.load_integral_matrix_button = tk.Button(master=self, text="Load Integral Matrix", command=self.load_integral_matrix)
+        self.load_integral_matrix_button = tk.Button(master=self, text="Load Integral Matrix",
+                                                     command=self.load_integral_matrix)
         self.spots_text = tk.StringVar(); self.integralM_text = tk.StringVar()  # text variables
         self.spots_label = tk.Label(master=self, textvariable=self.spots_text, anchor=tk.CENTER)
         self.integralM_label = tk.Label(master=self, textvariable=self.integralM_text, anchor=tk.CENTER)
@@ -682,29 +686,30 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
                     # Construction of figure holder for its representation
                     self.reconstruction_figure = plot_figure.Figure(figsize=(6.8, 5.7))
-                    self.reconstruction_canvas = FigureCanvasTkAgg(self.reconstruction_figure, master=self.reconstruction_window)
+                    self.reconstruction_canvas = FigureCanvasTkAgg(self.reconstruction_figure,
+                                                                   master=self.reconstruction_window)
                     self.reconstruction_fig_widget = self.reconstruction_canvas.get_tk_widget()
 
                     # Threshold value ctrls and packing
-                    self.threshold_frame = tk.Frame(master=self.reconstruction_window)  # for holding label and spinbox
+                    self.threshold_frame = tk.Frame(master=self.reconstruction_window)  # for holding ctrls below
                     self.threshold_label = tk.Label(master=self.threshold_frame, text="Threshold (1...254): ")
                     self.threshold_label.pack(side='left', padx=1, pady=1)
-                    self.threshold_value = tk.IntVar(); self.threshold_value.set(self.default_threshold)  # default threshold value
+                    self.threshold_value = tk.IntVar(); self.threshold_value.set(self.default_threshold)
                     self.threshold_value.trace_add(mode="write", callback=self.validate_threshold)
                     self.threshold_ctrl_box = tk.Spinbox(master=self.threshold_frame, from_=1, to=254,
                                                          increment=1, textvariable=self.threshold_value,
-                                                         wrap=True, width=4)   # adapt Spinbox to 4 digits in int value
+                                                         wrap=True, width=4)   # adapt Spinbox to 4 digits in int
                     self.threshold_ctrl_box.pack(side='left', padx=1, pady=1)
 
                     # Radius of sub-apertures ctrls and packing
-                    self.radius_frame = tk.Frame(master=self.reconstruction_window)  # for holding label and spinbox
+                    self.radius_frame = tk.Frame(master=self.reconstruction_window)  # for holding ctrls below
                     self.radius_label = tk.Label(master=self.radius_frame, text="Sub-aperture radius: ")
                     self.radius_label.pack(side='left', padx=1, pady=1)
-                    self.radius_value = tk.DoubleVar(); self.radius_value.set(self.default_radius)  # default threshold value
+                    self.radius_value = tk.DoubleVar(); self.radius_value.set(self.default_radius)
                     self.radius_value.trace_add(mode="write", callback=self.validate_radius)
                     self.radius_ctrl_box = tk.Spinbox(master=self.radius_frame, from_=1.0, to=100.0,
                                                       increment=0.2, textvariable=self.radius_value,
-                                                      wrap=True, width=4)   # adapt Spinbox to 4 digits in double value
+                                                      wrap=True, width=4)   # adapt Spinbox to 4 digits in double
                     self.radius_ctrl_box.pack(side='left', padx=1, pady=1)
 
                     # Place widgets on the Toplevel window
@@ -916,10 +921,12 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             # Toplevel window configuration for calibration - relative to the main window actual position!
             y_shift = self.master.winfo_geometry().split("+")[2]  # vertical shift
             x_shift = self.master.winfo_x() + self.master.winfo_width() + self.pad  # horizontal shift
-            self.camera_ctrl_window = tk.Toplevel(master=self); self.camera_ctrl_window.geometry(f'+{x_shift}+{y_shift}')
+            self.camera_ctrl_window = tk.Toplevel(master=self)
+            self.camera_ctrl_window.geometry(f'+{x_shift}+{y_shift}')
             self.camera_ctrl_window.protocol("WM_DELETE_WINDOW", self.camera_ctrl_exit)
             self.global_timeout = 0.25  # global timeout in seconds
             self.frame_figure_axes = None; self.__flag_live_stream = False
+            self.exposure_t_ms = 100
 
             # Buttons creation
             self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
@@ -928,6 +935,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_stream_button = tk.Button(master=self.camera_ctrl_window, text="Start Live",
                                                 command=self.live_stream, fg='green')
             self.live_stream_button.config(state="disabled")
+            self.cameras = ["Simulated", "IDS camera"]; self.selected_camera = tk.StringVar()
+            self.selected_camera.set(self.cameras[0])
+            self.camera_selector = tk.OptionMenu(self.camera_ctrl_window, self.selected_camera, *self.cameras)
 
             # Figure associated with live frame
             self.default_frame_figure = 6.0  # default figure size (in inches)
@@ -936,6 +946,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.frame_widget = self.canvas.get_tk_widget()
             self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
             self.plot_toolbar.update()
+            # Assign subplot to the created figure
+            if self.frame_figure_axes is None:
+                self.frame_figure_axes = self.frame_figure.add_subplot()
+                self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
+            self.imshowing = None  # AxesImage instance
 
             # Grid layout of all widgets
             self.camera_ctrl_pad = 4
@@ -945,22 +960,25 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                          padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.live_stream_button.grid(row=0, rowspan=1, column=2, columnspan=1,
                                          padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.camera_selector.grid(row=0, rowspan=1, column=0, columnspan=1,
+                                      padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.frame_widget.grid(row=1, rowspan=5, column=0, columnspan=5,
                                    padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.camera_ctrl_window.update()
 
             # Camera Initialization
-            self.messages2Camera = mpQueue(maxsize=10)  # Initialize message queue for communication with the camera
-            self.camera_messages = mpQueue(maxsize=10)  # Initialize message queue for listening messages from the camera
+            self.messages2Camera = mpQueue(maxsize=10)  # create message queue for communication with the camera
+            self.camera_messages = mpQueue(maxsize=10)  # create message queue for listening from the camera
             self.exceptions_queue = mpQueue(maxsize=5)  # Initialize separate queue for handling Exceptions
             self.images_queue = mpQueue(maxsize=40)  # Initialize the queue for holding acquired images
             self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
-            self.exposure_t_ms = 100
             self.image_height = 1000; self.image_width = 1000
             self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
                                                                 self.images_queue, self.camera_messages,
-                                                                self.exposure_t_ms, self.image_width, self.image_height)
-            self.camera_handle.start()  # start associated with the camera process
+                                                                self.exposure_t_ms, self.image_width,
+                                                                self.image_height,
+                                                                self.selected_camera.get())
+            self.camera_handle.start()  # start associated with the camera Process()
             # Wait the confirmation that camera initialized
             camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
             while(not camera_initialized_flag):
@@ -976,9 +994,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                         pass
                 else:
                     time.sleep(self.gui_refresh_rate_ms/1000)
-            # Exceptions and messeges handling
-            self.exceptions_checker = cam.check_exception_streams.CheckMessagesForExceptions(self.exceptions_queue,
-                                                                                             self)
+            # Exceptions and messeges handling - start associated Threads
+            self.exceptions_checker = cam.check_exception_streams.ExceptionsChecker(self.exceptions_queue,
+                                                                                    self)
             self.messages_printer = cam.check_exception_streams.MessagesPrinter(self.camera_messages)
             self.exceptions_checker.start(); self.messages_printer.start()
 
@@ -993,11 +1011,12 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         """
         if self.camera_handle is not None:
             if not(self.messages2Camera.full()):
-                self.messages2Camera.put_nowait("Snap single image")  # Send the command for acquiring single image
+                self.messages2Camera.put_nowait("Snap single image")  # the command for acquiring single image
                 # timeout to wait the image on the imagesQueue
-                timeout_wait = 105
+                timeout_wait = self.exposure_t_ms + 5
                 try:
-                    image = self.images_queue.get(block=True, timeout=(timeout_wait/1000))  # Waiting then image will be available
+                    # Waiting then image will be available
+                    image = self.images_queue.get(block=True, timeout=(timeout_wait/1000))
                 except Empty:
                     image = None
                     print("The snap image not acquired, timeout reached")
@@ -1017,34 +1036,45 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         self.__flag_live_stream = not self.__flag_live_stream   # changing the state of the flag
+        # Live Stream
         if self.__flag_live_stream:
             self.live_stream_button.config(text="Stop Live", fg='red')
-            self.plot_toolbar.destroy()
-            # FIXME: now everything works if only snap single image performed before
-            self.i = 0
+            self.single_snap_button.config(state="disabled")  # disabling the Single Frame acquisition
+            self.plot_toolbar.destroy()  # removes the toolbar with tools for image manipulations
             self.frame_figure_axes.mouseover = False  # disable tracing mouse
-            self.imshowing.set_animated(True)
+            # self.imshowing.set_animated(True)  # tests say that it's unnecessary in this application
             self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
-            self.image_updater = Thread(target=self.update_image, args=())  # assign updating of images to the evoked Thread
+            self.image_updater = Thread(target=self.update_image, args=())  # refresh process => evoked Thread
             self.image_updater.start()  # start the Thread and assigned to it task
+        # Single snap image
         else:
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
             self.live_stream_button.config(text="Start Live", fg='green')
+            self.single_snap_button.config(state="normal")
             self.frame_figure_axes.mouseover = True  # enable tracing mouse
+            # Recreate toolbar set of buttons again
             self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
             self.plot_toolbar.update(); self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
                                                                padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
 
     def update_image(self):
-        time.sleep(1.25*self.exposure_t_ms/1000)
-        delay = 1.04*self.exposure_t_ms
+        """
+        Target for running on separate Thread updating of images coming from a camera.
+
+        Returns
+        -------
+        None.
+
+        """
+        time.sleep(1.25*self.exposure_t_ms/1000)  # initial delay before querying for a new image from a queue
+        delay = 1.04*self.exposure_t_ms  # delay specification for stream of querying for a new image
         while(self.__flag_live_stream):
             t1 = time.perf_counter()
             try:
-                image = self.images_queue.get_nowait()
+                image = self.images_queue.get_nowait()  # get new image from a queue
                 if not(isinstance(image, str)) and (image is not None):
-                    self.show_image(image)
+                    self.show_image(image)  # call the function for image refreshing
             except Empty:
                 pass
             time.sleep(delay/1000)
@@ -1065,20 +1095,18 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        if self.frame_figure_axes is None:
-            self.frame_figure_axes = self.frame_figure.add_subplot()
-            self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
-        if not self.__flag_live_stream:
-            # self.frame_figure_axes.imshow(image, cmap='gray'); self.canvas.draw()
-            # !!! function below returns matplotlib.image.AxesImage class
+        if image is not None and isinstance(image, np.ndarray) and self.imshowing is None:
+            # Function below returns matplotlib.image.AxesImage class - need for further reference
             self.imshowing = self.frame_figure_axes.imshow(image, cmap='gray', interpolation='none',
                                                            vmin=0, vmax=255)
-            self.imshowing.set_animated(False); self.canvas.draw()
+        # Redraw image in the figure
+        if not self.__flag_live_stream:
+            self.imshowing.set_data(image)  # set data for AxesImage for updating image content
+            self.canvas.draw()
         else:
-            # !!! Important - set data for AxesImage for updating image content
-            # AND calling backend canvas for re-drawing of updated image in the idle state, that is
+            # !!! Calling backend canvas for re-drawing of updated image in the idle state, that is
             # more effective then call self.canvas.draw()
-            self.imshowing.set_data(image)
+            self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw_idle()
 
     def camera_ctrl_exit(self):
@@ -1093,9 +1121,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         if self.camera_handle is not None:
             # Send the message to stop the imaging and deinitialize the camera:
             self.messages2Camera.put_nowait("Close the camera")
-            if self.camera_handle.is_alive():  # if the threaded associated with the camera process hasn't been finished
+            if self.camera_handle.is_alive():  # if the associated with the camera Process hasn't been finished
                 self.camera_handle.join(timeout=self.global_timeout)  # wait the camera closing / deinitializing
-                self.camera_handle = None  # explicitly setting the handle to None for preventing again checking if it's alive
+                self.camera_handle = None  # for preventing again checking if it's alive
                 print("Camera process released")
         if self.exceptions_checker.is_alive():
             self.exceptions_queue.put_nowait("Stop Exception Checker")
@@ -1106,6 +1134,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_messages.put_nowait("Stop Messages Printer")
             self.messages_printer.join()
             print("Messages Printer stopped")
+        self.frame_figure_axes = None
         self.camera_ctrl_window.destroy(); self.camera_ctrl_window = None
 
 
