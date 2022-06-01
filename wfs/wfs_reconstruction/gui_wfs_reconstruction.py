@@ -927,6 +927,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.global_timeout = 0.25  # global timeout in seconds
             self.frame_figure_axes = None; self.__flag_live_stream = False
             self.exposure_t_ms = 100
+            self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
 
             # Buttons creation
             self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
@@ -935,9 +936,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_stream_button = tk.Button(master=self.camera_ctrl_window, text="Start Live",
                                                 command=self.live_stream, fg='green')
             self.live_stream_button.config(state="disabled")
-            self.cameras = ["Simulated", "IDS camera"]; self.selected_camera = tk.StringVar()
+            self.cameras = ["Simulated", "IDS"]; self.selected_camera = tk.StringVar()
             self.selected_camera.set(self.cameras[0])
-            self.camera_selector = tk.OptionMenu(self.camera_ctrl_window, self.selected_camera, *self.cameras)
+            self.camera_selector = tk.OptionMenu(self.camera_ctrl_window, self.selected_camera, *self.cameras,
+                                                 command=self.switch_active_camera)
+            self.camera_selector.config(state="disabled")
 
             # Figure associated with live frame
             self.default_frame_figure = 6.0  # default figure size (in inches)
@@ -971,7 +974,6 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_messages = mpQueue(maxsize=10)  # create message queue for listening from the camera
             self.exceptions_queue = mpQueue(maxsize=5)  # Initialize separate queue for handling Exceptions
             self.images_queue = mpQueue(maxsize=40)  # Initialize the queue for holding acquired images
-            self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
             self.image_height = 1000; self.image_width = 1000
             self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
                                                                 self.images_queue, self.camera_messages,
@@ -979,16 +981,16 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                                                 self.image_height,
                                                                 self.selected_camera.get())
             self.camera_handle.start()  # start associated with the camera Process()
-            # Wait the confirmation that camera initialized
+            # Wait the confirmation that camera initialized and Process launched
             camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
             while(not camera_initialized_flag):
                 if not self.camera_messages.empty():
                     try:
-                        message = self.camera_messages.get_nowait()
-                        print(message)
+                        message = self.camera_messages.get_nowait(); print(message)
                         if message == "Simulated camera Process has been launched":
                             self.single_snap_button.config(state="normal")
                             self.live_stream_button.config(state="normal")
+                            self.camera_selector.config(state="normal")
                             camera_initialized_flag = True; break
                     except Empty:
                         pass
@@ -1040,6 +1042,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         if self.__flag_live_stream:
             self.live_stream_button.config(text="Stop Live", fg='red')
             self.single_snap_button.config(state="disabled")  # disabling the Single Frame acquisition
+            self.camera_selector.config(state="disabled")  # disabling selection of the active camera
             self.plot_toolbar.destroy()  # removes the toolbar with tools for image manipulations
             self.frame_figure_axes.mouseover = False  # disable tracing mouse
             # self.imshowing.set_animated(True)  # tests say that it's unnecessary in this application
@@ -1051,7 +1054,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
             self.live_stream_button.config(text="Start Live", fg='green')
-            self.single_snap_button.config(state="normal")
+            self.single_snap_button.config(state="normal"); self.camera_selector.config(state="normal")
             self.frame_figure_axes.mouseover = True  # enable tracing mouse
             # Recreate toolbar set of buttons again
             self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
@@ -1109,9 +1112,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw_idle()
 
-    def camera_ctrl_exit(self):
+    def close_current_camera(self):
         """
-        Handle the closing event for camera control window (additional Top-level window).
+        Exit the associated with the active camera Process and close it (de-initialize).
 
         Returns
         -------
@@ -1123,8 +1126,99 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.messages2Camera.put_nowait("Close the camera")
             if self.camera_handle.is_alive():  # if the associated with the camera Process hasn't been finished
                 self.camera_handle.join(timeout=self.global_timeout)  # wait the camera closing / deinitializing
-                self.camera_handle = None  # for preventing again checking if it's alive
                 print("Camera process released")
+            self.camera_handle = None  # for preventing again checking if it's alive
+            # Print out all collected messages
+            while not self.camera_messages.empty():
+                try:
+                    print(self.camera_messages.get_nowait())
+                except Empty:
+                    break
+
+    def switch_active_camera(self, selected_camera: str):
+        """
+        Switch current active camera (IDS or Simulated).
+
+        Parameters
+        ----------
+        selected_camera : str
+            Returned tkinter OptionMenu button selected camera.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.close_current_camera()  # close the previously active camera
+        print("Selected camera:", selected_camera)
+        # Disable all controlling buttons
+        self.single_snap_button.config(state="disabled"); self.live_stream_button.config(state="disabled")
+        self.camera_selector.config(state="disabled")
+        # Initialize again the camera and associated Process
+        self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
+                                                            self.images_queue, self.camera_messages,
+                                                            self.exposure_t_ms, self.image_width,
+                                                            self.image_height,
+                                                            self.selected_camera.get())
+        self.camera_handle.start()  # start associated with the camera Process()
+        # Wait the confirmation that camera initialized
+        camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
+        if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
+            attempts = 2000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 2 s
+        else:
+            attempts = 200
+        i = 0  # counting attempts
+        wait_camera = False  # for separate 2 events: import controlling library and confiramtion from a camera
+        while(not camera_initialized_flag and i <= attempts):
+            if not self.camera_messages.empty():
+                try:
+                    message = self.camera_messages.get_nowait()
+                    if self.selected_camera.get() == "Simulated":
+                        print(message)
+                        if message == "Simulated camera Process has been launched":
+                            camera_initialized_flag = True; break
+                    else:
+                        # This case - for looking for initial import success of controlling IDS library
+                        if not wait_camera:
+                            if message == "The IDS controlling library imported":
+                                wait_camera = True; time.sleep(5*self.gui_refresh_rate_ms/1000)
+                            else:
+                                print("IDS camera not initialized, it reports:", message)
+                                camera_initialized_flag = False; self.camera_handle = None
+                                time.sleep(5*self.gui_refresh_rate_ms/1000); break
+                        # This case - for waiting the confirmation, that camera initialized
+                        else:
+                            print(message)
+                            if message == "The IDS camera initiliazed":
+                                camera_initialized_flag = True; break
+                            else:
+                                time.sleep(self.gui_refresh_rate_ms/1000); i += 1
+                except Empty:
+                    time.sleep(self.gui_refresh_rate_ms/1000); i += 1
+            else:
+                time.sleep(self.gui_refresh_rate_ms/1000); i += 1
+        # Below - handle if the IDS camera cannot be initialized
+        if i > attempts and not camera_initialized_flag:
+            print("Camera not initialized, timeout for initialization passed")
+            self.camera_handle = None  # prevent to send to simulated camera close command
+        # Below case - everything is ok
+        if camera_initialized_flag:
+            self.single_snap_button.config(state="normal"); self.live_stream_button.config(state="normal")
+            self.camera_selector.config(state="normal")
+        # Below case - IDS camera library not installed or camera not connected or something else wrong
+        if self.selected_camera.get() == "IDS" and not camera_initialized_flag:
+            self.selected_camera.set("Simulated"); self.switch_active_camera("Simulated")
+
+    def camera_ctrl_exit(self):
+        """
+        Handle the closing event for camera control window (the additional Top-level window).
+
+        Returns
+        -------
+        None.
+
+        """
+        self.close_current_camera()
         if self.exceptions_checker.is_alive():
             self.exceptions_queue.put_nowait("Stop Exception Checker")
             # The problem is here, that Thread below somehow waits for exit action, so

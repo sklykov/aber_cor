@@ -42,13 +42,13 @@ class CameraWrapper(Process):
             # All the camera initialization code moved to the run() method!
             # It's because the camera handle returned by the DLL library is not pickleable by the pickle method !!!
             try:
-                # from pyueye import ueye
-                print("The controlling library for IDS camera installed: ")
+                from pyueye import ueye
+                self.messages2caller.put_nowait("The IDS controlling library imported")
                 self.initialized = False  # Additional flag for the start the loop in the run method (run Process!)
-                self.max_width = 2048; self.max_height = 2048
-            except ImportError:
-                print("The IDS library for controlling of the camera isn't available."
-                      + " Install it from: ")
+                self.max_width = 2048; self.max_height = 2048  # (?): hard-coded values, retain the camera properties
+            except ImportError as e:
+                self.messages2caller.put_nowait("During the import of pyueye library the exception raised: "
+                                                + str(e))
                 self.initialized = False
         # Initialization code for the Simulated camera
         elif self.camera_type == "Simulated":
@@ -80,24 +80,23 @@ class CameraWrapper(Process):
         None.
 
         """
-        print("**** Camera Process() print stream WILL BE PRINTED BELOW if the camera changed ****")
-        if self.camera_type == "IDS":
-            # Since the import of the IDS library already has been tested above, again import for availability:
-            # from pyueye import ueye
-            try:
-                raise ValueError
-                # self.camera_reference = ... # open connection to the camera in the default mode
-                self.messages2caller.put_nowait("The IDS camera initialized")
-                # self.messages2caller.put_nowait("Default exposure time is set ms: " )
-                self.initialized = True  # Additional flag for the start the loop in the run metho
-                self.images_queue.put_nowait("The IDS camera initialized")
-            except ValueError:
-                self.messages2caller.put_nowait("CAMERA NOT INITIALIZED! THE HANDLE TO IT - 'NONE'")  # Only for debugging
-                self.images_queue.put_nowait("The Simulated IDS camera initialized")  # Notify the main GUI about initialization
-                self.camera_reference = None
-        else:
-            print("**** Simulated Camera Print Stream ****")
-        self.messages2caller.put_nowait(self.camera_type + " camera Process has been launched")  # Send the command for debugging
+        if self.initialized:
+            print("**** Camera Process() PRINT STREAM START: ****")
+            if self.camera_type == "IDS":
+                # Since the import of the IDS library already has been tested above, again import for availability:
+                from pyueye import ueye
+                try:
+                    raise ValueError
+                    # self.camera_reference = ... # open connection to the camera in the default mode
+                    self.messages2caller.put_nowait("The IDS camera initialized")
+                    # self.messages2caller.put_nowait("Default exposure time is set ms: " )
+                    self.initialized = True  # Additional flag for the start the loop in the run metho
+                    self.images_queue.put_nowait("The IDS camera initialized")
+                except ValueError or ImportError:
+                    self.messages2caller.put_nowait("CAMERA NOT INITIALIZED! THE HANDLE TO IT - 'NONE'")  # Only for debugging
+                    self.images_queue.put_nowait("The Simulated IDS camera initialized")  # Notify the main GUI about initialization
+                    self.camera_reference = None
+            self.messages2caller.put_nowait(self.camera_type + " camera Process has been launched")  # Send the command for debugging
         # The main loop - the handler in the Process loop
         n_check_camera_status = 0  # Check and report the status of the IDS camera each dozen of seconds (specification below)
         # Below - the loop that receives the commands from GUI and initialize function to handle them
@@ -109,7 +108,7 @@ class CameraWrapper(Process):
                     if isinstance(message, str):
                         # Close the Camera
                         if ((message == "Close the camera" or message == "Stop" or message == "Stop Program")
-                           or (message == "Close Camera")):
+                           or (message == "Close Camera") or (message == "Close camera")):
                             try:
                                 self.messages2caller.put_nowait("Received by the Camera: " + message)
                                 self.close()  # closing the connection to the camera and release all resources
@@ -153,8 +152,11 @@ class CameraWrapper(Process):
                         if message == "Restore Full Frame":
                             self.messages2caller.put_nowait(("Full frame restored: " + str((self.max_width, self.max_height))))
                             self.restore_full_frame()  # TODO
+
+                    # Messages - tuple (string + numerical parameters)
                     if isinstance(message, tuple):
                         (command, parameters) = message
+                        # Crop image
                         if command == "Crop Image":
                             # Send back for debugging crop parameters - below
                             self.messages2caller.put_nowait("Crop coordinates: " + str(parameters))
@@ -376,6 +378,7 @@ class CameraWrapper(Process):
             print("specify code for IDS")
         time.sleep(self.main_loop_time_delay/1000)  #
         self.messages2caller.put_nowait("The " + self.camera_type + " camera close() performed")
+        print("**** Camera Process() END OF PRINT STREAM ****")
 
     def generate_noise_picture(self, pixel_type: str = 'uint8') -> np.ndarray:
         """
