@@ -37,7 +37,6 @@ from threading import Thread
 print("Calling signature:", __name__)  # inspection of called signature
 if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__mp_main__":
     # ???: Last condition arised because of attempt to reload modules then additional Process launched, seems
-
     # Actual call as the standalone module or from other module from this package (as a dependecy)
     # Note that in this case this module is aware only about modules / packages in the same folder
     from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
@@ -108,7 +107,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.open_camera_button = tk.Button(master=self, text="Live Camera", command=self.open_camera)
 
         # Grid layout for placing buttons, labels, etc.
-        self.pad = 4  # specification of additional space between widgets in the grid layout
+        self.pad = 8  # specification of additional space between widgets in the grid layout
         self.load_aber_pic_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)  # Load Button
         self.calibrate_button.grid(row=0, rowspan=1, column=5, columnspan=1, padx=self.pad, pady=self.pad)  # Calibrate Button
         self.default_path_display.grid(row=0, rowspan=2, column=2, columnspan=3, padx=self.pad, pady=self.pad)
@@ -926,7 +925,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_ctrl_window.protocol("WM_DELETE_WINDOW", self.camera_ctrl_exit)
             self.global_timeout = 0.25  # global timeout in seconds
             self.frame_figure_axes = None; self.__flag_live_stream = False
-            self.exposure_t_ms = 100
+            self.exposure_t_ms = 50
             self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
 
             # Buttons creation
@@ -1015,7 +1014,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Snap single image")  # the command for acquiring single image
                 # timeout to wait the image on the imagesQueue
-                timeout_wait = self.exposure_t_ms + 5
+                timeout_wait = self.exposure_t_ms + 10
                 try:
                     # Waiting then image will be available
                     image = self.images_queue.get(block=True, timeout=(timeout_wait/1000))
@@ -1164,9 +1163,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Wait the confirmation that camera initialized
         camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
         if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
-            attempts = 2000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 2 s
+            attempts = 4000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 4 sec.
         else:
-            attempts = 200
+            attempts = 400
         i = 0  # counting attempts
         wait_camera = False  # for separate 2 events: import controlling library and confiramtion from a camera
         while(not camera_initialized_flag and i <= attempts):
@@ -1180,7 +1179,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                     else:
                         # This case - for looking for initial import success of controlling IDS library
                         if not wait_camera:
-                            if message == "The IDS controlling library imported":
+                            if message == "IDS controlling library and camera are both available":
                                 wait_camera = True; time.sleep(5*self.gui_refresh_rate_ms/1000)
                             else:
                                 print("IDS camera not initialized, it reports:", message)
@@ -1189,7 +1188,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                         # This case - for waiting the confirmation, that camera initialized
                         else:
                             print(message)
-                            if message == "The IDS camera initiliazed":
+                            if message == "The IDS camera initialized":
                                 camera_initialized_flag = True; break
                             else:
                                 time.sleep(self.gui_refresh_rate_ms/1000); i += 1
