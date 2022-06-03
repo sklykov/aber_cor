@@ -176,9 +176,14 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_ctrl_exit()
 
     # %% Calibration
-    def calibrate(self):
+    def calibrate(self, camera_ctrl_call: bool = False):
         """
         Perform calibration on the recorded non-aberrated image, stored on the local drive.
+
+        Parameters
+        ----------
+        camera_ctrl_call : bool, optional
+            If this function is called by button from camera_ctrl window. The default is False.
 
         Returns
         -------
@@ -193,6 +198,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibrate_window.protocol("WM_DELETE_WINDOW", self.calibration_exit)  # associate quit with the function
             self.calibrate_button.config(state="disabled")  # disable the Calibrate button
             self.calibrate_window.title("Calibration"); self.load_aber_pic_button.config(state="disabled")
+            self.camera_ctrl_call = camera_ctrl_call  # retain the call flag
 
             # Buttons specification for calibration
             pad = 4  # universal additional distance between buttons on grid layout
@@ -254,9 +260,30 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.zernike_order_selector.config(state="disabled")
 
             # Construction of figure holder for its representation
-            self.calibrate_figure = plot_figure.Figure(figsize=(6.8, 5.7))
+            if not self.camera_ctrl_call:
+                self.calibrate_figure = plot_figure.Figure(figsize=(6.8, 5.7))  # For provided sample image
+            else:
+                # Adjusted for the image coming from the camera
+                self.calibrate_figure = plot_figure.Figure(figsize=(self.default_frame_figure,
+                                                                    self.default_frame_figure))
             self.calibrate_canvas = FigureCanvasTkAgg(self.calibrate_figure, master=self.calibrate_window)
             self.calibrate_fig_widget = self.calibrate_canvas.get_tk_widget()
+            # Draw content of transferred image from the camera ctrl window
+            if self.camera_ctrl_call:
+                self.calibrate_axes = self.calibrate_figure.add_subplot()
+                self.calibrate_axes.axis('off'); self.calibrate_figure.tight_layout()
+                self.calibrate_axes.imshow(self.current_image, cmap='gray', interpolation='none',
+                                           vmin=0, vmax=255)
+                self.calibrate_canvas.draw()
+                if len(self.current_image.shape) > 2:
+                    self.loaded_image = np.squeeze(self.current_image, axis=2)  # Remove 3rd dimension from camera image
+                else:
+                    self.loaded_image = self.current_image
+                # Disable the load feature of calibration and proceed to calibration procedure
+                self.calibrate_load_spots_button.config(state="disabled")
+                self.threshold_ctrl_box.config(state="normal")  # enable the threshold button
+                self.radius_ctrl_box.config(state="normal")  # enable the radius button
+                self.calibrate_localize_button.config(state="normal")  # enable localization button
 
             # Layout of widgets on the calibration window
             self.calibrate_load_spots_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
@@ -296,6 +323,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 self.messages_queue.queue.clear()  # clear all messages from the messages queue
             self.calibrate_window.destroy(); self.calibrate_window = None
         self.load_aber_pic_button.config(state="normal")  # activate the load picture button
+        self.camera_ctrl_call = False  # for possible re-open of calibration window from camera ctrl one
 
     def load_picture(self):
         """
@@ -428,6 +456,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.redraw_loaded_image()  # call for refreshing image without plotted CoMs and sub-apertures
         self.activate_load_aber_pic_count = 0  # dis-activate the possibility to load aberrated picture before calibration complete
         self.load_aber_pic_button.config(state="disabled")
+        # print("image min and max: ", np.min(self.loaded_image), np.max(self.loaded_image))
         (self.coms_spots, self.theta0, self.rho0,
          self.integration_limits) = get_integral_limits_nonaberrated_centers(self.calibrate_axes,
                                                                              self.loaded_image,
@@ -927,6 +956,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.frame_figure_axes = None; self.__flag_live_stream = False
             self.exposure_t_ms = 50; self.exposure_t_ms_min = 1; self.exposure_t_ms_max = 100
             self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
+            self.calibration_activation = False  # for activating the button for calibration window open
 
             # Buttons creation
             self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
@@ -940,6 +970,10 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_selector = tk.OptionMenu(self.camera_ctrl_window, self.selected_camera, *self.cameras,
                                                  command=self.switch_active_camera)
             self.camera_selector.config(state="disabled")
+            self.calibration_activate_button = tk.Button(master=self.camera_ctrl_window, text="Calibrate",
+                                                         command=self.open_calibration, fg='blue')
+            self.calibration_activate_button.config(state="disabled")
+
             # Exposure time control
             self.exposure_t_ms_box = tk.Frame(master=self.camera_ctrl_window)
             self.exposure_t_ms_label = tk.Label(master=self.exposure_t_ms_box, text="Exposure time[ms]: ")
@@ -977,6 +1011,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                       padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.exposure_t_ms_box.grid(row=0, rowspan=1, column=3, columnspan=1,
                                         padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.calibration_activate_button.grid(row=0, rowspan=1, column=4, columnspan=1,
+                                                  padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.frame_widget.grid(row=1, rowspan=5, column=0, columnspan=5,
                                    padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.camera_ctrl_window.update()
@@ -1041,6 +1077,10 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 # Represent image on the figure (associated widget)
                 if not(isinstance(image, str)) and (image is not None):
                     self.show_image(image)
+                    # Activate below the button for calibration starting
+                    if not self.calibration_activation:
+                        self.calibration_activation = True
+                        self.calibration_activate_button.config(state="normal")
                 if isinstance(image, str):
                     print("Image: ", image)  # replacer for IDS simulation
 
@@ -1095,6 +1135,10 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 image = self.images_queue.get_nowait()  # get new image from a queue
                 if not(isinstance(image, str)) and (image is not None):
                     self.show_image(image)  # call the function for image refreshing
+                    # Activate below the button for calibration starting
+                    if not self.calibration_activation:
+                        self.calibration_activation = True
+                        self.calibration_activate_button.config(state="normal")
             except Empty:
                 pass
             time.sleep(delay/1000)
@@ -1114,6 +1158,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
+        self.current_image = image  # save it as the class instance for reusing in Calibration
         if image is not None and isinstance(image, np.ndarray) and self.imshowing is None:
             # Function below returns matplotlib.image.AxesImage class - need for further reference
             if self.selected_camera.get() == "Simulated":
@@ -1198,7 +1243,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Wait the confirmation that camera initialized
         camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
         if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
-            attempts = 5500//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 5.5 sec.
+            attempts = 5000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 5 sec.
         else:
             attempts = 500
         i = 0  # counting attempts
@@ -1304,6 +1349,20 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                     self.exposure_t_ms_ctrl.set(exp_t); print(message)
                 except Empty:
                     pass
+
+    def open_calibration(self):
+        """
+        Open calibration window and trasnfer last image to it.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.__flag_live_stream:
+            self.live_stream()  # stop live streaming, if it runs
+        self.calibrate(True)  # open calibration window and transfer the current displayed image there
+        self.camera_ctrl_exit()  # closes the camera controlling window, stop live stream
 
     def camera_ctrl_exit(self):
         """

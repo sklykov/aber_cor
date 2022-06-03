@@ -151,7 +151,7 @@ def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndar
                 y_relative = -coms_nonaberrated[i, 0] + y_central_subaperture   # relative to the central sub-aperture
                 rho0[j] = np.sqrt(np.power(x_relative, 2) + np.power(y_relative, 2))  # radial coordinate of lens pupil
                 # Calculation of integration limits for the angles theta
-                theta0[j] = np.arctan2(y_relative, x_relative)*(180/np.pi)  # Calculation arctan with right quadrant selection in grads!
+                theta0[j] = np.arctan2(y_relative, x_relative)*(180/np.pi)  # Calculation arctan with right quadrant in grads!
                 # ??? Maybe redundant but seems better to make conversion to all positive values angles:
                 if theta0[j] < 0.0:
                     theta0[j] += 360.0   # all negative angles become positive
@@ -162,7 +162,7 @@ def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndar
                 j += 1
         # Plot the found and used CoMs for calculations
         axes_fig.plot(subapertures_wt_central[:, 1], subapertures_wt_central[:, 0], '.', color="red")
-        # Before the calculation for angles made in grads, below the transfer to radians for passing it further to trigonometric functions
+        # Before the calculation for angles in grads, below the transfer to radians for passing it further to trigonometric functions
         theta0 = np.radians(theta0); integration_limits = np.radians(integration_limits)
     return subapertures_wt_central, theta0, rho0, integration_limits
 
