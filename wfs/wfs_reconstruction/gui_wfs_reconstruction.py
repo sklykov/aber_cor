@@ -925,7 +925,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_ctrl_window.protocol("WM_DELETE_WINDOW", self.camera_ctrl_exit)
             self.global_timeout = 0.25  # global timeout in seconds
             self.frame_figure_axes = None; self.__flag_live_stream = False
-            self.exposure_t_ms = 50
+            self.exposure_t_ms = 50; self.exposure_t_ms_min = 1; self.exposure_t_ms_max = 100
             self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
 
             # Buttons creation
@@ -940,6 +940,17 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_selector = tk.OptionMenu(self.camera_ctrl_window, self.selected_camera, *self.cameras,
                                                  command=self.switch_active_camera)
             self.camera_selector.config(state="disabled")
+            # Exposure time control
+            self.exposure_t_ms_box = tk.Frame(master=self.camera_ctrl_window)
+            self.exposure_t_ms_label = tk.Label(master=self.exposure_t_ms_box, text="Exposure time[ms]: ")
+            self.exposure_t_ms_ctrl = tk.DoubleVar(); self.exposure_t_ms_ctrl.set(self.exposure_t_ms)
+            self.exposure_t_ms_selector = tk.Spinbox(master=self.exposure_t_ms_box, from_=self.exposure_t_ms_min,
+                                                     to=self.exposure_t_ms_max,
+                                                     increment=1.0, textvariable=self.exposure_t_ms_ctrl,
+                                                     wrap=True, width=4, command=self.set_exposure_t_ms)
+            self.exposure_t_ms_selector.bind('<Return>', self.validate_exposure_t_input)  # validate input
+            self.exposure_t_ms_label.pack(side=tk.LEFT); self.exposure_t_ms_selector.pack(side=tk.LEFT)
+            self.exposure_t_ms_selector.config(state="disabled")
 
             # Figure associated with live frame
             self.default_frame_figure = 6.0  # default figure size (in inches)
@@ -964,6 +975,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                          padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.camera_selector.grid(row=0, rowspan=1, column=0, columnspan=1,
                                       padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.exposure_t_ms_box.grid(row=0, rowspan=1, column=3, columnspan=1,
+                                        padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.frame_widget.grid(row=1, rowspan=5, column=0, columnspan=5,
                                    padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.camera_ctrl_window.update()
@@ -990,6 +1003,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                             self.single_snap_button.config(state="normal")
                             self.live_stream_button.config(state="normal")
                             self.camera_selector.config(state="normal")
+                            self.exposure_t_ms_selector.config(state="normal")
                             camera_initialized_flag = True; break
                     except Empty:
                         pass
@@ -1014,7 +1028,10 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Snap single image")  # the command for acquiring single image
                 # timeout to wait the image on the imagesQueue
-                timeout_wait = self.exposure_t_ms + 10
+                if self.exposure_t_ms > 5:
+                    timeout_wait = 2*self.exposure_t_ms
+                else:
+                    timeout_wait = 10
                 try:
                     # Waiting then image will be available
                     image = self.images_queue.get(block=True, timeout=(timeout_wait/1000))
@@ -1042,7 +1059,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_stream_button.config(text="Stop Live", fg='red')
             self.single_snap_button.config(state="disabled")  # disabling the Single Frame acquisition
             self.camera_selector.config(state="disabled")  # disabling selection of the active camera
-            self.plot_toolbar.destroy()  # removes the toolbar with tools for image manipulations
+            self.exposure_t_ms_selector.config(state="disabled")
+            self.plot_toolbar.grid_remove()  # remove toolbar from the widget
             self.frame_figure_axes.mouseover = False  # disable tracing mouse
             # self.imshowing.set_animated(True)  # tests say that it's unnecessary in this application
             self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
@@ -1054,11 +1072,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
             self.live_stream_button.config(text="Start Live", fg='green')
             self.single_snap_button.config(state="normal"); self.camera_selector.config(state="normal")
+            self.exposure_t_ms_selector.config(state="normal")
             self.frame_figure_axes.mouseover = True  # enable tracing mouse
-            # Recreate toolbar set of buttons again
-            self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
-            self.plot_toolbar.update(); self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
-                                                               padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            # Restore toolbar on the same place as before
+            self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
+                                   padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
 
     def update_image(self):
         """
@@ -1072,7 +1090,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         time.sleep(1.25*self.exposure_t_ms/1000)  # initial delay before querying for a new image from a queue
         delay = 1.04*self.exposure_t_ms  # delay specification for stream of querying for a new image
         while(self.__flag_live_stream):
-            t1 = time.perf_counter()
+            # t1 = time.perf_counter()
             try:
                 image = self.images_queue.get_nowait()  # get new image from a queue
                 if not(isinstance(image, str)) and (image is not None):
@@ -1080,8 +1098,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             except Empty:
                 pass
             time.sleep(delay/1000)
-            t2 = time.perf_counter()
-            print("Image showing takes:", round((t2-t1)*1000))
+            # t2 = time.perf_counter(); print("Image showing takes:", round((t2-t1)*1000))
 
     def show_image(self, image: np.ndarray):
         """
@@ -1099,7 +1116,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         """
         if image is not None and isinstance(image, np.ndarray) and self.imshowing is None:
             # Function below returns matplotlib.image.AxesImage class - need for further reference
-            self.imshowing = self.frame_figure_axes.imshow(image, cmap='gray', interpolation='none',
+            if self.selected_camera.get() == "Simulated":
+                color_map = 'gray'
+            else:
+                color_map = 'plasma'
+            self.imshowing = self.frame_figure_axes.imshow(image, cmap=color_map, interpolation='none',
                                                            vmin=0, vmax=255)
         # Redraw image in the figure
         if not self.__flag_live_stream:
@@ -1121,8 +1142,14 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if self.camera_handle is not None:
+            # If there is live streaming going on, just first call the function to stop it
+            if self.__flag_live_stream:
+                self.live_stream()
+            # Disable all controlling buttons
+            self.single_snap_button.config(state="disabled"); self.live_stream_button.config(state="disabled")
+            self.camera_selector.config(state="disabled"); time.sleep(self.gui_refresh_rate_ms/1000)
             # Send the message to stop the imaging and deinitialize the camera:
-            self.messages2Camera.put_nowait("Close the camera")
+            self.messages2Camera.put_nowait("Close the camera"); time.sleep(self.gui_refresh_rate_ms/1000)
             if self.camera_handle.is_alive():  # if the associated with the camera Process hasn't been finished
                 self.camera_handle.join(timeout=self.global_timeout)  # wait the camera closing / deinitializing
                 print("Camera process released")
@@ -1148,24 +1175,32 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
+        # Clear the buffer with images
+        if not self.images_queue.empty():
+            for i in range(self.images_queue.qsize()):
+                try:
+                    self.images_queue.get_nowait()
+                except Empty:
+                    break
         self.close_current_camera()  # close the previously active camera
         print("Selected camera:", selected_camera)
-        # Disable all controlling buttons
-        self.single_snap_button.config(state="disabled"); self.live_stream_button.config(state="disabled")
-        self.camera_selector.config(state="disabled")
+        # Changing default exposure time for usability of the IDS camera
+        if selected_camera == "IDS":
+            self.exposure_t_ms = 2; self.exposure_t_ms_ctrl.set(2)
         # Initialize again the camera and associated Process
         self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
                                                             self.images_queue, self.camera_messages,
                                                             self.exposure_t_ms, self.image_width,
                                                             self.image_height,
                                                             self.selected_camera.get())
-        self.camera_handle.start()  # start associated with the camera Process()
+        if self.selected_camera.get() == "Simulated":
+            self.camera_handle.start()  # start associated with the camera Process()
         # Wait the confirmation that camera initialized
         camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
         if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
-            attempts = 4000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 4 sec.
+            attempts = 5500//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 5.5 sec.
         else:
-            attempts = 400
+            attempts = 500
         i = 0  # counting attempts
         wait_camera = False  # for separate 2 events: import controlling library and confiramtion from a camera
         while(not camera_initialized_flag and i <= attempts):
@@ -1176,18 +1211,21 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                         print(message)
                         if message == "Simulated camera Process has been launched":
                             camera_initialized_flag = True; break
+                        else:
+                            time.sleep(self.gui_refresh_rate_ms/1000); i += 1
                     else:
                         # This case - for looking for initial import success of controlling IDS library
                         if not wait_camera:
                             if message == "IDS controlling library and camera are both available":
-                                wait_camera = True; time.sleep(5*self.gui_refresh_rate_ms/1000)
+                                wait_camera = True; self.camera_handle.start()  # start associated Process()
+                                time.sleep(15*self.gui_refresh_rate_ms/1000)
                             else:
                                 print("IDS camera not initialized, it reports:", message)
                                 camera_initialized_flag = False; self.camera_handle = None
                                 time.sleep(5*self.gui_refresh_rate_ms/1000); break
                         # This case - for waiting the confirmation, that camera initialized
                         else:
-                            print(message)
+                            # print("Waiting confirmation from IDS camera and received: ", message)
                             if message == "The IDS camera initialized":
                                 camera_initialized_flag = True; break
                             else:
@@ -1200,13 +1238,72 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         if i > attempts and not camera_initialized_flag:
             print("Camera not initialized, timeout for initialization passed")
             self.camera_handle = None  # prevent to send to simulated camera close command
-        # Below case - everything is ok
-        if camera_initialized_flag:
-            self.single_snap_button.config(state="normal"); self.live_stream_button.config(state="normal")
-            self.camera_selector.config(state="normal")
         # Below case - IDS camera library not installed or camera not connected or something else wrong
         if self.selected_camera.get() == "IDS" and not camera_initialized_flag:
             self.selected_camera.set("Simulated"); self.switch_active_camera("Simulated")
+            self.exposure_t_ms = 50; self.exposure_t_ms_ctrl.set(50)
+        # Change the accepted range for the Exposure time for IDS camera
+        if self.selected_camera.get() == "IDS" and camera_initialized_flag:
+            self.exposure_t_ms_min = 0.01; self.exposure_t_ms_max = 100
+            self.exposure_t_ms_selector.config(from_=self.exposure_t_ms_min, to=self.exposure_t_ms_max,
+                                               increment=self.exposure_t_ms_min, width=5)
+        # Below case - everything is ok, activate back buttons
+        if camera_initialized_flag:
+            self.single_snap_button.config(state="normal"); self.live_stream_button.config(state="normal")
+            self.camera_selector.config(state="normal")
+
+    def validate_exposure_t_input(self, *args):
+        """
+        Validate user input into exposure time field.
+
+        Parameters
+        ----------
+        *args : string arguments.
+            Provided by tkinter signature call.
+
+        Returns
+        -------
+        None.
+
+        """
+        try:
+            exp_t = self.exposure_t_ms_ctrl.get()
+            if exp_t < self.exposure_t_ms_min and self.exposure_t_ms_max > 100.0:
+                self.exposure_t_ms_ctrl.set(self.exposure_t_ms)  # put previous assigned value
+            else:
+                self.exposure_t_ms = exp_t
+        except tk.TclError:
+            self.exposure_t_ms_ctrl.set(self.exposure_t_ms)  # put previous assigned value
+        self.camera_ctrl_window.focus_set()  # removing focus from input text variable
+        self.set_exposure_t_ms()   # call the set function of exposure time
+
+    def set_exposure_t_ms(self):
+        """
+        Set exposure time for the active camera.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.exposure_t_ms = self.exposure_t_ms_ctrl.get()
+        # print("Set exposure time: ", self.exposure_t_ms)  # DEBUG
+        # below - send the tuple with string command and exposure time value
+        if not self.messages2Camera.full():
+            self.messages2Camera.put_nowait(("Set exposure time", self.exposure_t_ms))
+        if self.selected_camera.get() == "Simulated":
+            time.sleep(self.gui_refresh_rate_ms/2000)
+        else:
+            # Get actual set exposure time
+            time.sleep((2*self.gui_refresh_rate_ms)/1000)
+            if not self.camera_messages.empty():
+                try:
+                    # Checking the answeer about actually set exposure time from the camera
+                    message = self.camera_messages.get_nowait()
+                    exp_t = message.split(":")[1]; exp_t = round(float(exp_t), 2)
+                    self.exposure_t_ms_ctrl.set(exp_t); print(message)
+                except Empty:
+                    pass
 
     def camera_ctrl_exit(self):
         """

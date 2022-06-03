@@ -117,12 +117,18 @@ class CameraWrapper(Process):
                         ueye.is_InquireImageMem(self.camera_reference, self.pc_image_memory,
                                                 self.mem_id, self.max_width, self.max_height,
                                                 self.bits_per_pixel, self.pitch)
+                        # Exposure time settings for the camera
+                        self.camera_exposure_t = ueye.DOUBLE(self.exposure_time_ms)
+                        self.set_exp_t_cmd = ueye.IS_EXPOSURE_CMD_SET_EXPOSURE.real
+                        ueye.is_Exposure(self.camera_reference, self.set_exp_t_cmd, self.camera_exposure_t, 8)
 
                 except ValueError or ImportError or NotImplementedError:
                     self.messages2caller.put_nowait("CAMERA NOT INITIALIZED! THE HANDLE TO IT - 'NONE'")  # Only for debugging
                     self.images_queue.put_nowait("The Simulated IDS camera initialized")  # Notify the main GUI about initialization
                     self.camera_reference = None
-            self.messages2caller.put_nowait(self.camera_type + " camera Process has been launched")  # Send the command for debugging
+
+            # Below - final confirmation that associated independent Process() launched (important for both cameras)
+            self.messages2caller.put_nowait(self.camera_type + " camera Process has been launched")
 
         # Below - the loop that receives the commands from GUI and initialize function to handle them
         while self.initialized:
@@ -216,9 +222,10 @@ class CameraWrapper(Process):
         """
         if (self.camera_reference is not None) and (self.camera_type == "IDS"):
             status = ueye.is_FreezeVideo(self.camera_reference, ueye.IS_DONT_WAIT)
-            array = ueye.get_data(self.pc_image_memory, self.max_width, self.max_height,
-                                  self.bits_per_pixel, self.pitch, copy=True)
-            self.messages2caller.put_nowait("Status: " + str(status) + ", 1D array size: " + str(array.size))
+            if status == ueye.IS_SUCCESS:
+                array = ueye.get_data(self.pc_image_memory, self.max_width, self.max_height,
+                                      self.bits_per_pixel, self.pitch, copy=True)
+            # self.messages2caller.put_nowait("Status: " + str(status) + ", 1D array size: " + str(array.size))
             if array.size > 0:
                 image = np.reshape(array, (self.max_height.value, self.max_width.value, int(self.bits_per_pixel//8)))
                 self.images_queue.put_nowait(image)  # put the image to the queue for getting it in the main thread
@@ -239,21 +246,34 @@ class CameraWrapper(Process):
         """
         self.live_stream_flag = True  # flag for the infinite loop for the streaming images continuously
         # General handle for live-streaming - starting with acquiring of the first image
+        if (self.camera_type == "IDS") and (self.camera_reference is not None):
+            status = ueye.is_CaptureVideo(self.camera_reference, ueye.IS_DONT_WAIT)
+        # make the loop below for infinite live stream, that could be stopped only by receiving the command or exception
         while self.live_stream_flag:
             # then it's supposed that the camera has been properly initialized - below
             if (self.camera_type == "IDS") and (self.camera_reference is not None):
-                # make the loop below for infinite live stream, that could be stopped only by receiving the command or exception
-                # try:
-                #     if not (self.images_queue.full()):
-                #         try:
-                #             self.images_queue.put_nowait(image)  # put the image to the queue for getting it in the main thread
-                #         except Full:
-                #             pass  # do nothing for now if the overloaded queue is tried to use
-                # except Exception as error:
-                #     self.messages2caller.put_nowait("The Live Mode finished by IDS camera because of thrown Exception")
-                #     self.messages2caller.put_nowait("Thrown error: " + str(error))
-                #     self.live_stream_flag = False  # stop the loop
-                print("specify code for IDS")
+                if status == ueye.IS_SUCCESS:
+                    try:
+                        if not (self.images_queue.full()):
+                            # Getting image from the buffer
+                            try:
+                                array = ueye.get_data(self.pc_image_memory, self.max_width,
+                                                      self.max_height, self.bits_per_pixel,
+                                                      self.pitch, copy=True)
+                                if array.size > 0:
+                                    image = np.reshape(array, (self.max_height.value, self.max_width.value,
+                                                               int(self.bits_per_pixel//8)))
+                                    self.images_queue.put_nowait(image)  # put the image to the queue for send it to GUI
+                                    time.sleep(self.exposure_time_ms/50)  # artificial delay (IDS camera requires small exp.t.)
+                            except Full:
+                                pass  # do nothing for now if the overloaded queue is tried to use
+                    except Exception as error:
+                        self.messages2caller.put_nowait("The Live Mode finished by IDS camera because of thrown Exception")
+                        self.messages2caller.put_nowait("Thrown error: " + str(error))
+                        self.live_stream_flag = False  # stop the loop
+                else:
+                    self.messages2caller.put_nowait("IDS camera capture hasn't succesful status")
+                    self.live_stream_flag = False
             elif (self.camera_type == "IDS") and (self.camera_reference is None):
                 # Substitution of actual image generation by the IDS camera
                 time.sleep(self.exposure_time_ms/1000)
@@ -263,7 +283,7 @@ class CameraWrapper(Process):
                 if not(self.images_queue.full()):
                     self.images_queue.put_nowait(image)
                 time.sleep(self.exposure_time_ms/1000)  # Delay due to the simulated exposure
-            # Below - checking for the command "Stop Live stream
+            # Below - checking for the command "Stop Live stream"
             if not(self.messages_queue.empty()) and (self.messages_queue.qsize() > 0):
                 try:
                     message = self.messages_queue.get_nowait()  # get the message from the main controlling GUI
@@ -271,7 +291,8 @@ class CameraWrapper(Process):
                         if message == "Stop Live Stream":
                             self.messages2caller.put_nowait("Camera stop live streaming")
                             if (self.camera_type == "IDS") and (self.camera_reference is not None):
-                                self.camera_reference.stop()  # stop the live stream from the IDS  camera
+                                ueye.is_StopLiveVideo(self.camera_reference,
+                                                      ueye.IS_DONT_WAIT)  # stop the live stream from the IDS camera
                             self.live_stream_flag = False; break
                     elif isinstance(message, Exception):
                         self.messages2caller.put_nowait("Camera stop live streaming because of the reported error")
@@ -282,13 +303,13 @@ class CameraWrapper(Process):
                 except Empty:
                     pass
 
-    def set_exposure_time(self, exposure_t_ms: int):
+    def set_exposure_time(self, exposure_t_ms: float):
         """
         Set exposure time for the camera.
 
         Parameters
         ----------
-        exposure_t_ms : int
+        exposure_t_ms : float
             Provided value for exposure time from GUI.
 
         Returns
@@ -296,16 +317,27 @@ class CameraWrapper(Process):
         None.
 
         """
-        if isinstance(exposure_t_ms, int):
+        if isinstance(exposure_t_ms, float):
             if exposure_t_ms <= 0:  # exposure time cannot be 0
                 exposure_t_ms = 1
             self.exposure_time_ms = exposure_t_ms
-            # if the camera is really activated, then call the function
+            if self.camera_type == "Simulated":
+                self.messages2caller.put_nowait("The set exposure time ms: " + str(self.exposure_time_ms))
+            # if the camera is really activated, then call the function for IDS API
             if self.camera_reference is not None and self.camera_type == "IDS":
-                print("specify code for IDS")
-                # Report back the set exposure time for the actual camera
-                self.messages2caller.put_nowait("The set exposure time ms: "
-                                                + str(int(np.round(1000*(self.camera_reference.get_exposure_time()), 0))))
+                self.camera_exposure_t = ueye.DOUBLE(self.exposure_time_ms)
+                result = ueye.is_Exposure(self.camera_reference, self.set_exp_t_cmd, self.camera_exposure_t, 8)
+                if result == 0:
+                    # Report back the set exposure time for the actual camera
+                    actual_exp_t = ueye.DOUBLE(); cmd = ueye.IS_EXPOSURE_CMD_GET_EXPOSURE.real
+                    rc = ueye.is_Exposure(self.camera_reference, cmd, actual_exp_t, 8)
+                    if rc == 0:
+                        if actual_exp_t > 1.0:
+                            self.messages2caller.put_nowait("The set exposure time ms: "
+                                                            + str(int(np.round((actual_exp_t), 0))))
+                        else:
+                            self.messages2caller.put_nowait("The set exposure time ms: "
+                                                            + str((np.round((actual_exp_t), 3))))
 
     def return_camera_status(self):
         """

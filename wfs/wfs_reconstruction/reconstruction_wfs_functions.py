@@ -81,7 +81,7 @@ def get_localCoM_matrix(image: np.ndarray, axes_fig, min_dist_peaks: int = 15, t
 def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndarray, threshold_abs: float = 55.0,
                                              aperture_radius: float = 15.0) -> tuple:
     """
-    Calculate the center of masses of localized focal spots and also the integration limits for further modal wavefront reconstruction.
+    Calculate the center of masses of localized focal spots and the integration limits for further modal wavefront reconstruction.
 
     Focal spots are recorded within the non-aberrated image (flat wavefront) from Shack-Hartmann sensor.
 
