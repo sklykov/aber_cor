@@ -127,7 +127,7 @@ def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndar
         x_central_subaperture = coms_nonaberrated[i_center_subaperture, 1]
         y_central_subaperture = coms_nonaberrated[i_center_subaperture, 0]
         # Plotting the found center of image and central sub-aperture
-        axes_fig.plot(x_central_subaperture, y_central_subaperture, '+', color="red")
+        axes_fig.plot(x_central_subaperture, y_central_subaperture, '+', color="blue")
         # axes_fig.plot(x_img_center, y_img_center, '+', color="blue")
         # Detected centers below are searched for on the aberrated image, so the shifts in CoMs should be calculated relatively to it
         rho0 = np.zeros(np.size(coms_nonaberrated, 0)-1, dtype='float')  # polar coordinate r of a sub-aperture (lens)

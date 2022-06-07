@@ -89,7 +89,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.load_aber_pic_button.config(state="disabled")
         self.calibrate_button = tk.Button(master=self, text="Calibrate", command=self.calibrate)
         # Display the default searching path
-        self.default_path_display = tk.Text(master=self, height=3, width=45, wrap=tk.CHAR,
+        self.default_path_display = tk.Text(master=self, height=3, width=46, wrap=tk.CHAR,
                                             font=(self.default_font.actual()['family'],
                                                   self.default_font.actual()['size']))
         self.default_path_display.insert('end', "Default path to calibration files: \n", ('header path',))
@@ -268,12 +268,18 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                                                     self.default_frame_figure))
             self.calibrate_canvas = FigureCanvasTkAgg(self.calibrate_figure, master=self.calibrate_window)
             self.calibrate_fig_widget = self.calibrate_canvas.get_tk_widget()
+            # Toolbar - with tools for image manipulation
+            self.calibrate_fig_toolbar = NavigationToolbar2Tk(self.calibrate_canvas, self.calibrate_window,
+                                                              pack_toolbar=False)
+            self.calibrate_fig_toolbar.update()
+
             # Draw content of transferred image from the camera ctrl window
             if self.camera_ctrl_call:
                 self.calibrate_axes = self.calibrate_figure.add_subplot()
                 self.calibrate_axes.axis('off'); self.calibrate_figure.tight_layout()
                 self.calibrate_axes.imshow(self.current_image, cmap='gray', interpolation='none',
                                            vmin=0, vmax=255)
+                self.calibrate_figure.subplots_adjust(left=0, bottom=0, right=1, top=1)  # remove white borders
                 self.calibrate_canvas.draw()
                 if len(self.current_image.shape) > 2:
                     self.loaded_image = np.squeeze(self.current_image, axis=2)  # Remove 3rd dimension from camera image
@@ -284,6 +290,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 self.threshold_ctrl_box.config(state="normal")  # enable the threshold button
                 self.radius_ctrl_box.config(state="normal")  # enable the radius button
                 self.calibrate_localize_button.config(state="normal")  # enable localization button
+                # Change default parameters for better adjustment to IDS camera pictures
+                self.default_threshold = 70; self.threshold_value.set(self.default_threshold)
+                self.default_radius = 10.0; self.radius_value.set(self.default_radius)
 
             # Layout of widgets on the calibration window
             self.calibrate_load_spots_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
@@ -292,11 +301,12 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.radius_frame.grid(row=0, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
             self.save_coms_button.grid(row=0, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
             self.calibrate_fig_widget.grid(row=1, rowspan=4, column=0, columnspan=5, padx=pad, pady=pad)
-            self.calc_integral_matrix_button.grid(row=5, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
-            self.zernike_order_selector.grid(row=5, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
-            self.progress_frame.grid(row=5, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
-            self.abort_integral_matrix_button.grid(row=5, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
-            self.save_integral_matrix_button.grid(row=5, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
+            self.calc_integral_matrix_button.grid(row=7, rowspan=1, column=0, columnspan=1, padx=pad, pady=pad)
+            self.zernike_order_selector.grid(row=7, rowspan=1, column=1, columnspan=1, padx=pad, pady=pad)
+            self.progress_frame.grid(row=7, rowspan=1, column=2, columnspan=1, padx=pad, pady=pad)
+            self.abort_integral_matrix_button.grid(row=7, rowspan=1, column=3, columnspan=1, padx=pad, pady=pad)
+            self.save_integral_matrix_button.grid(row=7, rowspan=1, column=4, columnspan=1, padx=pad, pady=pad)
+            self.calibrate_fig_toolbar.grid(row=5, rowspan=2, column=1, columnspan=4, padx=pad, pady=pad)
             self.calibrate_window.grid()
             self.calibrate_window.config(takefocus=True)  # put the created windows in focus
             self.calibration = True  # flag for association of images with the calibration window
@@ -973,6 +983,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibration_activate_button = tk.Button(master=self.camera_ctrl_window, text="Calibrate",
                                                          command=self.open_calibration, fg='blue')
             self.calibration_activate_button.config(state="disabled")
+            self.live_reconstruction_button = tk.Button(master=self.camera_ctrl_window, text="Start Reconstruction",
+                                                        command=self.live_reconstruction, fg='magenta')
+            self.live_reconstruction_button.config(state="disabled")
+            self.get_focal_spots_button = tk.Button(master=self.camera_ctrl_window, text="Get local spots",
+                                                    command=self.live_localize_spots, fg='green')
 
             # Exposure time control
             self.exposure_t_ms_box = tk.Frame(master=self.camera_ctrl_window)
@@ -997,6 +1012,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if self.frame_figure_axes is None:
                 self.frame_figure_axes = self.frame_figure.add_subplot()
                 self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
+                self.frame_figure.subplots_adjust(left=0, bottom=0, right=1, top=1)  # remove white borders
             self.imshowing = None  # AxesImage instance
 
             # Grid layout of all widgets
@@ -1015,6 +1031,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                                   padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.frame_widget.grid(row=1, rowspan=5, column=0, columnspan=5,
                                    padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.live_reconstruction_button.grid(row=6, rowspan=1, column=0, columnspan=1,
+                                                 padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.camera_ctrl_window.update()
 
             # Camera Initialization
@@ -1094,25 +1112,29 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         self.__flag_live_stream = not self.__flag_live_stream   # changing the state of the flag
-        # Live Stream
+        # Start Live Stream
         if self.__flag_live_stream:
             self.live_stream_button.config(text="Stop Live", fg='red')
             self.single_snap_button.config(state="disabled")  # disabling the Single Frame acquisition
             self.camera_selector.config(state="disabled")  # disabling selection of the active camera
             self.exposure_t_ms_selector.config(state="disabled")
+            if self.selected_camera.get() == "IDS":
+                self.live_reconstruction_button.config(state="disabled")
             self.plot_toolbar.grid_remove()  # remove toolbar from the widget
             self.frame_figure_axes.mouseover = False  # disable tracing mouse
             # self.imshowing.set_animated(True)  # tests say that it's unnecessary in this application
             self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
             self.image_updater = Thread(target=self.update_image, args=())  # refresh process => evoked Thread
             self.image_updater.start()  # start the Thread and assigned to it task
-        # Single snap image
+        # Stop Live Stream
         else:
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
             self.live_stream_button.config(text="Start Live", fg='green')
             self.single_snap_button.config(state="normal"); self.camera_selector.config(state="normal")
             self.exposure_t_ms_selector.config(state="normal")
+            if self.selected_camera.get() == "IDS":
+                self.live_reconstruction_button.config(state="normal")
             self.frame_figure_axes.mouseover = True  # enable tracing mouse
             # Restore toolbar on the same place as before
             self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
@@ -1172,8 +1194,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw()
         else:
-            # !!! Calling backend canvas for re-drawing of updated image in the idle state, that is
-            # more effective then call self.canvas.draw()
+            # !!! Calling backend canvas for re-drawing of updated image in the idle state (draw_idle())
+            # that is more effective then call self.canvas.draw()
             self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw_idle()
 
@@ -1235,11 +1257,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Initialize again the camera and associated Process
         self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
                                                             self.images_queue, self.camera_messages,
-                                                            self.exposure_t_ms, self.image_width,
-                                                            self.image_height,
+                                                            self.exposure_t_ms, self.image_width, self.image_height,
                                                             self.selected_camera.get())
         if self.selected_camera.get() == "Simulated":
             self.camera_handle.start()  # start associated with the camera Process()
+            self.live_reconstruction_button.config(state="disabled")  # disable reconstruction for simulations
         # Wait the confirmation that camera initialized
         camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
         if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
@@ -1292,10 +1314,18 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.exposure_t_ms_min = 0.01; self.exposure_t_ms_max = 100
             self.exposure_t_ms_selector.config(from_=self.exposure_t_ms_min, to=self.exposure_t_ms_max,
                                                increment=self.exposure_t_ms_min, width=5)
+            self.live_reconstruction_button.config(state="normal")
         # Below case - everything is ok, activate back buttons
         if camera_initialized_flag:
             self.single_snap_button.config(state="normal"); self.live_stream_button.config(state="normal")
             self.camera_selector.config(state="normal")
+
+        # Configuration of color map for image show (if the switching between cameras happen)
+        if self.imshowing is not None:
+            if self.selected_camera.get() == "IDS":
+                self.imshowing.set(cmap='plasma')
+            else:
+                self.imshowing.set(cmap='gray')
 
     def validate_exposure_t_input(self, *args):
         """
@@ -1363,6 +1393,34 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_stream()  # stop live streaming, if it runs
         self.calibrate(True)  # open calibration window and transfer the current displayed image there
         self.camera_ctrl_exit()  # closes the camera controlling window, stop live stream
+
+    def live_reconstruction(self):
+        """
+        Make live reconstruction of wavefronts.
+
+        Returns
+        -------
+        None.
+
+        """
+        # TODO: implement it
+        self.live_stream()  # call to the live stream initiliazation or stop
+        self.live_reconstruction_button.config(state="normal")  # becaus it's disabled by self.live_stream()
+        # Disable / enable calinbration feature and Stop Live / Start Live + put additional controls
+        if self.__flag_live_stream:
+            self.live_reconstruction_button.config(text="Stop Reconstruction", fg='red')
+            self.live_stream_button.config(state="disabled")
+            self.calibration_activate_button.config(state="disabled")
+            self.get_focal_spots_button.grid(row=6, rowspan=1, column=1, columnspan=1,
+                                             padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+        else:
+            self.live_reconstruction_button.config(text="Start Reconstruction", fg='magenta')
+            self.live_stream_button.config(state="normal")
+            self.calibration_activate_button.config(state="normal")
+            self.get_focal_spots_button.grid_remove()
+
+    def live_localize_spots(self):
+        pass
 
     def camera_ctrl_exit(self):
         """
