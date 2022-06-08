@@ -1123,6 +1123,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.plot_toolbar.grid_remove()  # remove toolbar from the widget
             self.frame_figure_axes.mouseover = False  # disable tracing mouse
             # self.imshowing.set_animated(True)  # tests say that it's unnecessary in this application
+
             self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
             self.image_updater = Thread(target=self.update_image, args=())  # refresh process => evoked Thread
             self.image_updater.start()  # start the Thread and assigned to it task
@@ -1133,12 +1134,14 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_stream_button.config(text="Start Live", fg='green')
             self.single_snap_button.config(state="normal"); self.camera_selector.config(state="normal")
             self.exposure_t_ms_selector.config(state="normal")
-            if self.selected_camera.get() == "IDS":
-                self.live_reconstruction_button.config(state="normal")
+            self.frame_figure_axes.format_coord = self.format_coord  # !!! Fix bug (next string)
+            # Bug: after live streaming, hovering mouse pointer over the image not showing pixel value
             self.frame_figure_axes.mouseover = True  # enable tracing mouse
             # Restore toolbar on the same place as before
             self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
                                    padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            if self.selected_camera.get() == "IDS":
+                self.live_reconstruction_button.config(state="normal")
 
     def update_image(self):
         """
@@ -1180,7 +1183,12 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
+        # Remove 3rd dimension from camera image for correct working of the cursor data update
+        if len(image.shape) > 2:
+            image = np.squeeze(image, axis=2)
         self.current_image = image  # save it as the class instance for reusing in Calibration
+
+        # Initialize the AxesImage if this function called 1st time
         if image is not None and isinstance(image, np.ndarray) and self.imshowing is None:
             # Function below returns matplotlib.image.AxesImage class - need for further reference
             if self.selected_camera.get() == "Simulated":
@@ -1198,6 +1206,35 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             # that is more effective then call self.canvas.draw()
             self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw_idle()
+
+    def format_coord(self, x, y):
+        """
+        Re-implementation of default matplotlib function that failed after live streaming launch.
+
+        Reference
+        ---------
+            See https://matplotlib.org/stable/gallery/images_contours_and_fields/image_zcoord.html
+
+        Parameters
+        ----------
+        x : float
+            x coordinate provided by matplotlib events during hovering the mouse on an image.
+        y : float
+            y coordinate provided by matplotlib events.
+
+        Returns
+        -------
+        str
+            Formatted string that is shown by Navigation toolbar on the GUI.
+
+        """
+        numrows, numcols = self.current_image.shape  # image sizes
+        x = int(round(x, 0)); y = int(round(y, 0))  # according the Reference above
+        if 0 <= x < numcols and 0 <= y < numrows:
+            z = self.current_image[y, x]
+            return 'x=%1.0f, y=%1.0f \n [%1.0f]' % (x, y, z)
+        else:
+            return 'x=%1.0f, y=%1.0f' % (x, y)
 
     def close_current_camera(self):
         """
@@ -1254,6 +1291,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Changing default exposure time for usability of the IDS camera
         if selected_camera == "IDS":
             self.exposure_t_ms = 2; self.exposure_t_ms_ctrl.set(2)
+        else:
+            self.exposure_t_ms = 50; self.exposure_t_ms_ctrl.set(50)
         # Initialize again the camera and associated Process
         self.camera_handle = cam.cameras_ctrl.CameraWrapper(self.messages2Camera, self.exceptions_queue,
                                                             self.images_queue, self.camera_messages,
@@ -1265,9 +1304,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Wait the confirmation that camera initialized
         camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
         if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
-            attempts = 5000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 5 sec.
+            attempts = 5500//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 5.5 sec.
         else:
-            attempts = 500
+            attempts = 550
         i = 0  # counting attempts
         wait_camera = False  # for separate 2 events: import controlling library and confiramtion from a camera
         while(not camera_initialized_flag and i <= attempts):
@@ -1324,6 +1363,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         if self.imshowing is not None:
             if self.selected_camera.get() == "IDS":
                 self.imshowing.set(cmap='plasma')
+                # Set the zero image after the switching of camera
+                # Default for IDS camera sizes = 2048x2048, hard-coded now, but it reports in the init message
+                self.imshowing.set_data(np.zeros((2048, 2048))); self.canvas.draw()
+                self.current_image = np.zeros((2048, 2048), dtype='uint8')
+                self.plot_toolbar.update()
             else:
                 self.imshowing.set(cmap='gray')
 
@@ -1413,14 +1457,72 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibration_activate_button.config(state="disabled")
             self.get_focal_spots_button.grid(row=6, rowspan=1, column=1, columnspan=1,
                                              padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+
+            # Threshold value ctrls and packing
+            self.threshold_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
+            self.threshold_label_lvRec = tk.Label(master=self.threshold_frame_lvRec, text="Threshold(1..254): ")
+            self.threshold_label_lvRec.pack(side='left', padx=1, pady=1)
+            self.default_threshold = 128
+            self.threshold_value_lvRec = tk.IntVar(); self.threshold_value_lvRec.set(self.default_threshold)
+            # self.threshold_value.trace_add(mode="write", callback=self.validate_threshold)
+            self.threshold_ctrl_box_lvRec = tk.Spinbox(master=self.threshold_frame_lvRec, from_=1, to=254,
+                                                       increment=1, textvariable=self.threshold_value_lvRec,
+                                                       wrap=True, width=4)   # adapt Spinbox to 4 digits in int
+            self.threshold_ctrl_box_lvRec.pack(side='left', padx=1, pady=1)
+            self.threshold_frame_lvRec.grid(row=6, rowspan=1, column=2, columnspan=1,
+                                            padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+
+            # Radius of sub-apertures ctrls and packing
+            self.radius_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
+            self.radius_label_lvRec = tk.Label(master=self.radius_frame_lvRec, text="Sub-ap. radius(px): ")
+            self.radius_label_lvRec.pack(side='left', padx=1, pady=1)
+            self.default_radius = 9.0
+            self.radius_value_lvRec = tk.DoubleVar(); self.radius_value_lvRec.set(self.default_radius)
+            # self.radius_value_lvRec.trace_add(mode="write", callback=self.validate_radius)
+            self.radius_ctrl_box_lvRec = tk.Spinbox(master=self.radius_frame_lvRec, from_=1.0, to=50.0,
+                                                    increment=0.2, textvariable=self.radius_value_lvRec,
+                                                    wrap=True, width=4)   # adapt Spinbox to 4 digits in double
+            self.radius_ctrl_box_lvRec.pack(side='left', padx=1, pady=1)
+            self.radius_frame_lvRec.grid(row=6, rowspan=1, column=3, columnspan=1,
+                                         padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.plot_points = None
         else:
+            # Buttons show / hide
             self.live_reconstruction_button.config(text="Start Reconstruction", fg='magenta')
-            self.live_stream_button.config(state="normal")
+            self.live_stream_button.config(state="normal"); self.radius_frame_lvRec.grid_remove()
             self.calibration_activate_button.config(state="normal")
-            self.get_focal_spots_button.grid_remove()
+            self.get_focal_spots_button.grid_remove(); self.threshold_frame_lvRec.grid_remove()
+            # Below - removing drawn localized spots
+            # Ref.: https://www.adamsmith.haus/python/answers/how-to-remove-a-line-from-a-plot-in-python
+            if self.plot_points is not None:
+                self.plot_points.pop(0).remove(); self.plot_points = None
 
     def live_localize_spots(self):
-        pass
+        """
+        Find the focal spots on the image streaming from the IDS camera and localize them.
+
+        Returns
+        -------
+        None.
+
+        """
+        t1 = time.perf_counter()
+        min_dist_peaks = int(np.round(1.5*self.radius_value_lvRec.get(), 0))
+        region_size = int(np.round(1.4*self.radius_value_lvRec.get(), 0))
+        self.coms_aberrated = get_localCoM_matrix(image=self.current_image, axes_fig=self.frame_figure_axes,
+                                                  threshold_abs=self.threshold_value_lvRec.get(),
+                                                  min_dist_peaks=min_dist_peaks, region_size=region_size)
+        t2 = time.perf_counter(); print("Localization takes sec.:", round((t2-t1), 1))
+        # Below - plotting found spots
+        rows, cols = self.coms_aberrated.shape
+        if rows > 0 and cols > 0:
+            # Use only one sample of plt.lines.Line2D for drawing found spots
+            if self.plot_points is None:
+                self.plot_points = self.frame_figure_axes.plot(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0],
+                                                               '.', color="red")
+            else:
+                self.plot_points[0].set_data(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0])
+            self.canvas.draw()  # redraw image in the widget (stored in canvas)
 
     def camera_ctrl_exit(self):
         """
