@@ -77,6 +77,39 @@ def get_localCoM_matrix(image: np.ndarray, axes_fig, min_dist_peaks: int = 15, t
     # axes_fig.plot(coms[:, 1], coms[:, 0], '.', color="green")
     return coms
 
+def get_coms_fast(image: np.ndarray, nonaberrated_coms: np.ndarray,
+                  threshold_abs: float = 55.0, region_size: int = 16) -> np.array:
+    (rows, cols) = image.shape
+    half_size = region_size // 2  # Half of rectangle area for calculation of CoM
+    size = np.size(nonaberrated_coms, 0)  # Number of found local peaks
+    nonaberrated_coms = (np.round(nonaberrated_coms, 0)).astype(int)
+    coms = np.zeros((size, 2), dtype='float')  # Center of masses coordinates initialization
+    for i in range(size):
+        x_left_upper = check_img_coordinate(cols, nonaberrated_coms[i, 1] - half_size)
+        y_left_upper = check_img_coordinate(rows, nonaberrated_coms[i, 0] - half_size)
+        # CoMs calculation
+        subregion = image[y_left_upper:y_left_upper+2*half_size, x_left_upper:x_left_upper+2*half_size]
+        print(subregion)
+        (coms[i, 0], coms[i, 1]) = ndimage.center_of_mass(subregion)
+        coms[i, 0] += y_left_upper; coms[i, 1] += x_left_upper
+        print(coms[i, 0], coms[i, 1])
+        x_center = int(round(coms[i, 1], 0)); y_center = int(round(coms[i, 0], 0))
+        peak_value = image[y_center, x_center]
+        print(peak_value, x_center, y_center)
+        # Check that found CoM correspond to the bright spot
+        if peak_value < threshold_abs:
+            coms[i, 0] = -1; coms[i, 1] = -1
+    # Delete peaks with negative coordinates (less then absolute threshold)
+    j = 0
+    while(j < size):
+        if coms[j, 0] == -1 and coms[j, 1] == -1:
+            coms = np.delete(coms, j, axis=1)
+            size = np.size(coms, 0)
+            print(size, coms.shape)
+        else:
+            j += 1
+    return coms
+
 
 def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndarray, threshold_abs: float = 55.0,
                                              aperture_radius: float = 15.0) -> tuple:

@@ -41,7 +41,7 @@ if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__m
     # Note that in this case this module is aware only about modules / packages in the same folder
     from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
                                               get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
-                                              get_zernike_order_from_coefficients_number)
+                                              get_zernike_order_from_coefficients_number, get_coms_fast)
     from calc_zernikes_sh_wfs import get_polynomials_coefficients
     from zernike_pol_calc import get_plot_zps_polar
     import camera as cam  # for accessing controlling wrapper for the cameras (simulated and IDS)
@@ -49,7 +49,7 @@ else:  # relative imports for resolving these dependencies in the case of import
     from .reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
                                                get_localCoM_matrix, get_coms_shifts,
                                                get_zernike_coefficients_list,
-                                               get_zernike_order_from_coefficients_number)
+                                               get_zernike_order_from_coefficients_number, get_coms_fast)
     from .calc_zernikes_sh_wfs import get_polynomials_coefficients
     from .zernike_pol_calc import get_plot_zps_polar
     from . import camera as cam   # for accessing controlling wrapper for the cameras (simulated and IDS)
@@ -1509,9 +1509,15 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         t1 = time.perf_counter()
         min_dist_peaks = int(np.round(1.5*self.radius_value_lvRec.get(), 0))
         region_size = int(np.round(1.4*self.radius_value_lvRec.get(), 0))
-        self.coms_aberrated = get_localCoM_matrix(image=self.current_image, axes_fig=self.frame_figure_axes,
-                                                  threshold_abs=self.threshold_value_lvRec.get(),
-                                                  min_dist_peaks=min_dist_peaks, region_size=region_size)
+        # self.coms_aberrated = get_localCoM_matrix(image=self.current_image, axes_fig=self.frame_figure_axes,
+        #                                           threshold_abs=self.threshold_value_lvRec.get(),
+        #                                           min_dist_peaks=min_dist_peaks, region_size=region_size)
+        # ??? self.current_image is zero
+        print(self.current_image)
+        self.coms_aberrated = get_coms_fast(image=self.current_image, nonaberrated_coms=self.coms_spots,
+                                            threshold_abs=self.threshold_value_lvRec.get(),
+                                            region_size=region_size)
+
         t2 = time.perf_counter(); print("Localization takes sec.:", round((t2-t1), 1))
         # Below - plotting found spots
         rows, cols = self.coms_aberrated.shape
