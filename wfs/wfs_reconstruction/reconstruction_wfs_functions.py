@@ -77,8 +77,29 @@ def get_localCoM_matrix(image: np.ndarray, axes_fig, min_dist_peaks: int = 15, t
     # axes_fig.plot(coms[:, 1], coms[:, 0], '.', color="green")
     return coms
 
+
 def get_coms_fast(image: np.ndarray, nonaberrated_coms: np.ndarray,
                   threshold_abs: float = 55.0, region_size: int = 16) -> np.array:
+    """
+    Calculate local center of masses in the region around of found previously peaks (thus it's faster than get_localCoM_matrix()).
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Shack-Hartmann image with focal spots of focused wavefront.
+    axes_fig : matplotlib.Axes
+        Class of the figure shown in the GUI widget (window).
+    threshold_abs : float, optional
+        Absolute minimal intensity value for start searching of a local peak. The default is 55.0.
+    region_size : int, optional
+        Size of local rectangle, there the center of mass is calculated. The default is 16.
+
+    Returns
+    -------
+    coms : np.array
+        Calculated center of masses (CoMs) coordinates.
+
+    """
     (rows, cols) = image.shape
     half_size = region_size // 2  # Half of rectangle area for calculation of CoM
     size = np.size(nonaberrated_coms, 0)  # Number of found local peaks
@@ -89,25 +110,17 @@ def get_coms_fast(image: np.ndarray, nonaberrated_coms: np.ndarray,
         y_left_upper = check_img_coordinate(rows, nonaberrated_coms[i, 0] - half_size)
         # CoMs calculation
         subregion = image[y_left_upper:y_left_upper+2*half_size, x_left_upper:x_left_upper+2*half_size]
-        print(subregion)
-        (coms[i, 0], coms[i, 1]) = ndimage.center_of_mass(subregion)
-        coms[i, 0] += y_left_upper; coms[i, 1] += x_left_upper
-        print(coms[i, 0], coms[i, 1])
-        x_center = int(round(coms[i, 1], 0)); y_center = int(round(coms[i, 0], 0))
-        peak_value = image[y_center, x_center]
-        print(peak_value, x_center, y_center)
-        # Check that found CoM correspond to the bright spot
-        if peak_value < threshold_abs:
-            coms[i, 0] = -1; coms[i, 1] = -1
-    # Delete peaks with negative coordinates (less then absolute threshold)
-    j = 0
-    while(j < size):
-        if coms[j, 0] == -1 and coms[j, 1] == -1:
-            coms = np.delete(coms, j, axis=1)
-            size = np.size(coms, 0)
-            print(size, coms.shape)
+        if np.max(subregion) >= threshold_abs:
+            (coms[i, 0], coms[i, 1]) = ndimage.center_of_mass(subregion)
+            coms[i, 0] += y_left_upper; coms[i, 1] += x_left_upper
+            x_center = int(round(coms[i, 1], 0)); y_center = int(round(coms[i, 0], 0))
+            peak_value = image[y_center, x_center]
+            # Check that found CoM correspond to the bright spot
+            if peak_value < threshold_abs:
+                coms[i, 0] = -1; coms[i, 1] = -1
         else:
-            j += 1
+            coms[i, 0] = -1; coms[i, 1] = -1
+
     return coms
 
 
@@ -162,7 +175,7 @@ def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndar
         # Plotting the found center of image and central sub-aperture
         axes_fig.plot(x_central_subaperture, y_central_subaperture, '+', color="blue")
         # axes_fig.plot(x_img_center, y_img_center, '+', color="blue")
-        # Detected centers below are searched for on the aberrated image, so the shifts in CoMs should be calculated relatively to it
+        # Detected centers below are searched for on the aberrated image, so shifts in CoMs should be calculated relatively to it
         rho0 = np.zeros(np.size(coms_nonaberrated, 0)-1, dtype='float')  # polar coordinate r of a sub-aperture (lens)
         theta0 = np.zeros(np.size(coms_nonaberrated, 0)-1, dtype='float')  # polar coordinate theta of a sub-aperture (lens)
         theta_a = np.zeros(np.size(coms_nonaberrated, 0)-1, dtype='float')  # integration limits (lower) on theta (1)
@@ -508,6 +521,52 @@ def get_coms_shifts(coms_nonaberrated: np.ndarray, integral_matrix: np.ndarray, 
     integral_matrix_aberrated = np.delete(integral_matrix_aberrated, i_central_aperture, axis=0)
 
     return coms_shifts, integral_matrix_aberrated, coms_aberrated
+
+
+def get_coms_shifts_fast(coms_nonaberrated: np.ndarray, integral_matrix: np.ndarray,
+                         coms_aberrated: np.ndarray) -> tuple:
+    """
+    Calculate shifts between non- and aberrated CoMs. The last ones should be calculated previously by calling get_coms_fast().
+
+    Parameters
+    ----------
+    coms_nonaberrated : np.ndarray
+        Calculated center of masses around local focal spots on the non-aberrated image.
+    coms_aberrated : np.ndarray
+        Calculated center of masses around local focal spots on the aberrated image.
+    integral_matrix : np.ndarray
+        Calculated the integral matrix for Zernike polynomials.
+
+    Returns
+    -------
+    tuple
+        (shifts of CoMs, integral matrix, aberrated CoMs).
+
+    """
+    # Delete peaks with negative coordinates (less then absolute threshold, defined before)
+    size = np.size(coms_aberrated, 0)
+    coms_shifts = np.zeros((np.size(coms_aberrated, 0), 2), dtype='float')  # Shifts between CoMs
+    for i in range(np.size(coms_aberrated, 0)):
+        if coms_aberrated[i, 0] == -1 and coms_aberrated[i, 1] == -1:
+            # for further deletion
+            coms_shifts[i, 0] = -1000; coms_shifts[i, 1] = -1000
+        else:
+            diffY_sign = (coms_aberrated[i, 0] - coms_nonaberrated[i, 0])
+            diffX_sign = (coms_aberrated[i, 1] - coms_nonaberrated[i, 1])
+            coms_shifts[i, 0] = -diffY_sign  # Direction of Y axis swapped (not as on the picture, from top to bottom)
+            coms_shifts[i, 1] = diffX_sign  # Direction of X axis is the same as on the picture (from left to right)
+    j = 0
+    # Delete non-detected spots
+    while(j < size):
+        if coms_aberrated[j, 0] == -1 and coms_aberrated[j, 1] == -1:
+            coms_aberrated = np.delete(coms_aberrated, j, axis=0)
+            coms_shifts = np.delete(coms_shifts, j, axis=0)
+            integral_matrix = np.delete(integral_matrix, j, axis=0)
+            size = np.size(coms_aberrated, 0)
+        else:
+            j += 1
+
+    return (coms_shifts, integral_matrix, coms_aberrated)
 
 
 # %% Threaded class for integral matrix calculation

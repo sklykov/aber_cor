@@ -41,7 +41,8 @@ if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__m
     # Note that in this case this module is aware only about modules / packages in the same folder
     from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
                                               get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
-                                              get_zernike_order_from_coefficients_number, get_coms_fast)
+                                              get_zernike_order_from_coefficients_number, get_coms_fast,
+                                              get_coms_shifts_fast)
     from calc_zernikes_sh_wfs import get_polynomials_coefficients
     from zernike_pol_calc import get_plot_zps_polar
     import camera as cam  # for accessing controlling wrapper for the cameras (simulated and IDS)
@@ -49,7 +50,8 @@ else:  # relative imports for resolving these dependencies in the case of import
     from .reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
                                                get_localCoM_matrix, get_coms_shifts,
                                                get_zernike_coefficients_list,
-                                               get_zernike_order_from_coefficients_number, get_coms_fast)
+                                               get_zernike_order_from_coefficients_number, get_coms_fast,
+                                               get_coms_shifts_fast)
     from .calc_zernikes_sh_wfs import get_polynomials_coefficients
     from .zernike_pol_calc import get_plot_zps_polar
     from . import camera as cam   # for accessing controlling wrapper for the cameras (simulated and IDS)
@@ -82,6 +84,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.reconstruction_axes = None; self.reconstruction_plots = None
         self.camera_ctrl_window = None  # holder for the top-level window controlling a camera
         self.default_font = font.nametofont("TkDefaultFont")
+        self.coms_aberrated = None; self.coms_shifts = None
 
         # Buttons and labels specification
         self.load_aber_pic_button = tk.Button(master=self, text="Load Aber.Picture",
@@ -92,8 +95,6 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         self.default_path_display = tk.Text(master=self, height=3, width=46, wrap=tk.CHAR,
                                             font=(self.default_font.actual()['family'],
                                                   self.default_font.actual()['size']))
-        self.default_path_display.insert('end', "Default path to calibration files: \n", ('header path',))
-        self.default_path_display.tag_config('header path', justify=tk.CENTER)
         self.current_path = os.path.dirname(__file__); self.calibration_path = os.path.join(self.current_path,
                                                                                             "calibrations")
         # Buttons and labels
@@ -131,6 +132,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if os.path.exists(self.calibration_path) and os.path.isdir(self.calibration_path):
+            self.default_path_display.delete(0.0, 'end')  # clean previously assigned path
+            self.default_path_display.insert('end', "Default path to calibration files: \n", ('header path',))
+            self.default_path_display.tag_config('header path', justify=tk.CENTER)
             self.default_path_display.insert('end', (self.calibration_path))
             self.spots_path = os.path.join(self.calibration_path, "detected_focal_spots.npy")
             self.integralM_path = os.path.join(self.calibration_path, "integral_calibration_matrix.npy")
@@ -291,7 +295,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 self.radius_ctrl_box.config(state="normal")  # enable the radius button
                 self.calibrate_localize_button.config(state="normal")  # enable localization button
                 # Change default parameters for better adjustment to IDS camera pictures
-                self.default_threshold = 70; self.threshold_value.set(self.default_threshold)
+                self.default_threshold = 127; self.threshold_value.set(self.default_threshold)
                 self.default_radius = 10.0; self.radius_value.set(self.default_radius)
 
             # Layout of widgets on the calibration window
@@ -498,6 +502,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if coms_file is not None:
                 self.calibrated_spots_path = coms_file.name
                 np.save(self.calibrated_spots_path, self.coms_spots)
+                self.calibration_path, tail = os.path.split(self.calibrated_spots_path)
                 self.set_default_path()   # update the indicator of default detected spots path
 
     def order_selected(self, *args):
@@ -598,6 +603,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         if integralM_file is not None:
             self.integral_matrix_path = integralM_file.name
             np.save(self.integral_matrix_path, self.integral_matrix)
+            self.calibration_path, tail = os.path.split(self.integral_matrix_path)
             self.set_default_path()   # update the indicator of default detected spots path
 
     # %% Reconstruction
@@ -619,7 +625,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                               defaultextension=".npy", initialfile="detected_focal_spots.npy")
         if coms_file is not None:
             self.calibrated_spots_path = coms_file.name
-            self.coms_spots = np.load(self.spots_path)
+            self.coms_spots = np.load(self.calibrated_spots_path)
             rows, cols = self.coms_spots.shape
             if rows > 0 and cols > 0:
                 # below - force the user to load the integral matrix again, if the file with spots reloaded
@@ -967,6 +973,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.exposure_t_ms = 50; self.exposure_t_ms_min = 1; self.exposure_t_ms_max = 100
             self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
             self.calibration_activation = False  # for activating the button for calibration window open
+            self.coms_shifts = None; self.coms_aberrated = None
+            self.__flag_live_localization = False; self.reconstruction_updater = None
 
             # Buttons creation
             self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
@@ -986,7 +994,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_reconstruction_button = tk.Button(master=self.camera_ctrl_window, text="Start Reconstruction",
                                                         command=self.live_reconstruction, fg='magenta')
             self.live_reconstruction_button.config(state="disabled")
-            self.get_focal_spots_button = tk.Button(master=self.camera_ctrl_window, text="Get local spots",
+            self.get_focal_spots_button = tk.Button(master=self.camera_ctrl_window, text="Start Localization",
                                                     command=self.live_localize_spots, fg='green')
 
             # Exposure time control
@@ -1123,9 +1131,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.plot_toolbar.grid_remove()  # remove toolbar from the widget
             self.frame_figure_axes.mouseover = False  # disable tracing mouse
             # self.imshowing.set_animated(True)  # tests say that it's unnecessary in this application
-
             self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
-            self.image_updater = Thread(target=self.update_image, args=())  # refresh process => evoked Thread
+            # refresh of displayed images process => evoked Thread
+            self.image_updater = Thread(target=self.update_image, args=())
             self.image_updater.start()  # start the Thread and assigned to it task
         # Stop Live Stream
         else:
@@ -1158,7 +1166,10 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             # t1 = time.perf_counter()
             try:
                 image = self.images_queue.get_nowait()  # get new image from a queue
-                if not(isinstance(image, str)) and (image is not None):
+                if not(isinstance(image, str)) and (image is not None) and isinstance(image, np.ndarray):
+                    # Remove 3rd dimension from camera image for correct working of the cursor data update
+                    if len(image.shape) > 2:
+                        image = np.squeeze(image, axis=2)
                     self.show_image(image)  # call the function for image refreshing
                     # Activate below the button for calibration starting
                     if not self.calibration_activation:
@@ -1183,11 +1194,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        # Remove 3rd dimension from camera image for correct working of the cursor data update
-        if len(image.shape) > 2:
-            image = np.squeeze(image, axis=2)
         self.current_image = image  # save it as the class instance for reusing in Calibration
-
         # Initialize the AxesImage if this function called 1st time
         if image is not None and isinstance(image, np.ndarray) and self.imshowing is None:
             # Function below returns matplotlib.image.AxesImage class - need for further reference
@@ -1287,7 +1294,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                 except Empty:
                     break
         self.close_current_camera()  # close the previously active camera
-        print("Selected camera:", selected_camera)
+        print("Selected camera:", self.selected_camera.get())
         # Changing default exposure time for usability of the IDS camera
         if selected_camera == "IDS":
             self.exposure_t_ms = 2; self.exposure_t_ms_ctrl.set(2)
@@ -1301,12 +1308,14 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         if self.selected_camera.get() == "Simulated":
             self.camera_handle.start()  # start associated with the camera Process()
             self.live_reconstruction_button.config(state="disabled")  # disable reconstruction for simulations
+        else:
+            time.sleep(self.gui_refresh_rate_ms/1000)
         # Wait the confirmation that camera initialized
         camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
         if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
-            attempts = 5500//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 5.5 sec.
+            attempts = 6000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 6 sec.
         else:
-            attempts = 550
+            attempts = 600
         i = 0  # counting attempts
         wait_camera = False  # for separate 2 events: import controlling library and confiramtion from a camera
         while(not camera_initialized_flag and i <= attempts):
@@ -1320,15 +1329,16 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                         else:
                             time.sleep(self.gui_refresh_rate_ms/1000); i += 1
                     else:
+                        # print("Message from IDS camera:", message)
                         # This case - for looking for initial import success of controlling IDS library
                         if not wait_camera:
                             if message == "IDS controlling library and camera are both available":
                                 wait_camera = True; self.camera_handle.start()  # start associated Process()
-                                time.sleep(15*self.gui_refresh_rate_ms/1000)
+                                time.sleep(5*self.gui_refresh_rate_ms/1000)
                             else:
                                 print("IDS camera not initialized, it reports:", message)
                                 camera_initialized_flag = False; self.camera_handle = None
-                                time.sleep(5*self.gui_refresh_rate_ms/1000); break
+                                time.sleep(2*self.gui_refresh_rate_ms/1000); break
                         # This case - for waiting the confirmation, that camera initialized
                         else:
                             # print("Waiting confirmation from IDS camera and received: ", message)
@@ -1361,15 +1371,23 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         # Configuration of color map for image show (if the switching between cameras happen)
         if self.imshowing is not None:
+            # It's necessary to delete previous axes (subplot) for fully refresh the image and toolbar!
+            self.frame_figure.clear()  # clear all axes
+            self.frame_figure_axes = self.frame_figure.add_subplot()  # create new axis!
+            self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
+            self.frame_figure.subplots_adjust(left=0, bottom=0, right=1, top=1)  # remove white borders
+            # Set the zero image after the switching of camera
             if self.selected_camera.get() == "IDS":
-                self.imshowing.set(cmap='plasma')
-                # Set the zero image after the switching of camera
-                # Default for IDS camera sizes = 2048x2048, hard-coded now, but it reports in the init message
-                self.imshowing.set_data(np.zeros((2048, 2048))); self.canvas.draw()
-                self.current_image = np.zeros((2048, 2048), dtype='uint8')
-                self.plot_toolbar.update()
+                # Default for IDS camera sizes = 2048x2048, hard-coded now, but it reports this in the init. message
+                self.image_width = 2048; self.image_height = 2048; color_map = 'plasma'
             else:
-                self.imshowing.set(cmap='gray')
+                self.image_width = 1000; self.image_height = 1000; color_map = 'gray'
+
+            # Update blank image for picking up by toolbar right dimensions sizes
+            self.current_image = np.zeros((self.image_width, self.image_height), dtype='uint8')
+            self.imshowing = self.frame_figure_axes.imshow(self.current_image, cmap=color_map,
+                                                           interpolation='none', vmin=0, vmax=255)
+            self.canvas.draw(); self.frame_widget.update(); self.plot_toolbar.update()
 
     def validate_exposure_t_input(self, *args):
         """
@@ -1406,7 +1424,6 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         self.exposure_t_ms = self.exposure_t_ms_ctrl.get()
-        # print("Set exposure time: ", self.exposure_t_ms)  # DEBUG
         # below - send the tuple with string command and exposure time value
         if not self.messages2Camera.full():
             self.messages2Camera.put_nowait(("Set exposure time", self.exposure_t_ms))
@@ -1447,12 +1464,12 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        # TODO: implement it
         self.live_stream()  # call to the live stream initiliazation or stop
-        self.live_reconstruction_button.config(state="normal")  # becaus it's disabled by self.live_stream()
+        self.live_reconstruction_button.config(state="normal")  # because it's disabled by self.live_stream()
         # Disable / enable calinbration feature and Stop Live / Start Live + put additional controls
         if self.__flag_live_stream:
             self.live_reconstruction_button.config(text="Stop Reconstruction", fg='red')
+            self.get_focal_spots_button.config(text="Start Localization", fg='green')
             self.live_stream_button.config(state="disabled")
             self.calibration_activate_button.config(state="disabled")
             self.get_focal_spots_button.grid(row=6, rowspan=1, column=1, columnspan=1,
@@ -1462,7 +1479,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.threshold_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
             self.threshold_label_lvRec = tk.Label(master=self.threshold_frame_lvRec, text="Threshold(1..254): ")
             self.threshold_label_lvRec.pack(side='left', padx=1, pady=1)
-            self.default_threshold = 128
+            self.default_threshold = 110
             self.threshold_value_lvRec = tk.IntVar(); self.threshold_value_lvRec.set(self.default_threshold)
             # self.threshold_value.trace_add(mode="write", callback=self.validate_threshold)
             self.threshold_ctrl_box_lvRec = tk.Spinbox(master=self.threshold_frame_lvRec, from_=1, to=254,
@@ -1476,7 +1493,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.radius_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
             self.radius_label_lvRec = tk.Label(master=self.radius_frame_lvRec, text="Sub-ap. radius(px): ")
             self.radius_label_lvRec.pack(side='left', padx=1, pady=1)
-            self.default_radius = 9.0
+            self.default_radius = 10.0
             self.radius_value_lvRec = tk.DoubleVar(); self.radius_value_lvRec.set(self.default_radius)
             # self.radius_value_lvRec.trace_add(mode="write", callback=self.validate_radius)
             self.radius_ctrl_box_lvRec = tk.Spinbox(master=self.radius_frame_lvRec, from_=1.0, to=50.0,
@@ -1492,43 +1509,76 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_stream_button.config(state="normal"); self.radius_frame_lvRec.grid_remove()
             self.calibration_activate_button.config(state="normal")
             self.get_focal_spots_button.grid_remove(); self.threshold_frame_lvRec.grid_remove()
-            # Below - removing drawn localized spots
-            # Ref.: https://www.adamsmith.haus/python/answers/how-to-remove-a-line-from-a-plot-in-python
-            if self.plot_points is not None:
-                self.plot_points.pop(0).remove(); self.plot_points = None
 
     def live_localize_spots(self):
         """
-        Find the focal spots on the image streaming from the IDS camera and localize them.
+        Launch the localization of focal spots on the separate thread.
 
         Returns
         -------
         None.
 
         """
-        t1 = time.perf_counter()
-        min_dist_peaks = int(np.round(1.5*self.radius_value_lvRec.get(), 0))
-        region_size = int(np.round(1.4*self.radius_value_lvRec.get(), 0))
-        # self.coms_aberrated = get_localCoM_matrix(image=self.current_image, axes_fig=self.frame_figure_axes,
-        #                                           threshold_abs=self.threshold_value_lvRec.get(),
-        #                                           min_dist_peaks=min_dist_peaks, region_size=region_size)
-        # ??? self.current_image is zero
-        print(self.current_image)
-        self.coms_aberrated = get_coms_fast(image=self.current_image, nonaberrated_coms=self.coms_spots,
-                                            threshold_abs=self.threshold_value_lvRec.get(),
-                                            region_size=region_size)
+        time.sleep(2*self.gui_refresh_rate_ms/1000)
+        self.__flag_live_localization = not self.__flag_live_localization
+        if self.__flag_live_stream and self.__flag_live_localization:
+            # refresh of displayed images process => evoked Thread
+            self.reconstruction_updater = Thread(target=self.localize_spots_on_thread, args=())
+            self.reconstruction_updater.start()  # start the Thread and assigned to it task
+            self.get_focal_spots_button.config(text="Stop Localization", fg='red')
+        elif not self.__flag_live_localization:
+            self.get_focal_spots_button.config(text="Start Localization", fg='green')
 
-        t2 = time.perf_counter(); print("Localization takes sec.:", round((t2-t1), 1))
-        # Below - plotting found spots
-        rows, cols = self.coms_aberrated.shape
-        if rows > 0 and cols > 0:
-            # Use only one sample of plt.lines.Line2D for drawing found spots
-            if self.plot_points is None:
-                self.plot_points = self.frame_figure_axes.plot(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0],
-                                                               '.', color="red")
-            else:
-                self.plot_points[0].set_data(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0])
-            self.canvas.draw()  # redraw image in the widget (stored in canvas)
+    def localize_spots_on_thread(self):
+        """
+        Localize current focal spots, calculate shifts between them and calibrated spots and Zernike coefficients.
+
+        Returns
+        -------
+        None.
+
+        """
+        while(self.__flag_live_stream and self.__flag_live_localization):
+            t1 = time.perf_counter()
+            region_size = int(np.round(1.6*self.radius_value_lvRec.get(), 0))
+            self.coms_aberrated = get_coms_fast(image=self.current_image, nonaberrated_coms=self.coms_spots,
+                                                threshold_abs=self.threshold_value_lvRec.get(),
+                                                region_size=region_size)
+            # Below - plotting found spots
+            rows, cols = self.coms_aberrated.shape
+            if rows > 0 and cols > 0:
+                (self.coms_shifts, self.integral_matrix_aberrated,
+                 self.coms_aberrated) = get_coms_shifts_fast(self.coms_spots, self.integral_matrix,
+                                                             self.coms_aberrated)
+                # Use only one sample of plt.lines.Line2D for drawing found spots
+                if self.plot_points is None:
+                    self.plot_points = self.frame_figure_axes.plot(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0],
+                                                                   '.', color="red")
+                else:
+                    self.plot_points[0].set_data(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0])
+                self.canvas.draw_idle()  # redraw image in the widget (stored in canvas)
+                t2 = time.perf_counter(); print("Shifts coms calc. takes sec.:", round((t2-t1), 1))
+                rows, cols = self.coms_shifts.shape
+                if rows > 0 and cols > 0:
+                    self.alpha_coefficients = get_polynomials_coefficients(self.integral_matrix_aberrated,
+                                                                           self.coms_shifts)
+                    # self.alpha_coefficients *= np.pi  # for adjusting to radians ???
+                    self.alpha_coefficients = list(self.alpha_coefficients)
+                    if len(self.alpha_coefficients) > 0:
+                        # Define below used orders of Zernikes and providing them for amplitudes calculation
+                        self.order = get_zernike_order_from_coefficients_number(len(self.alpha_coefficients))
+                        self.zernike_list_orders = get_zernike_coefficients_list(self.order)
+                        print(self.alpha_coefficients)
+                        # t3 = time.perf_counter(); print("Zernike coeff. calc. takes sec.:", round((t3-t2), 1))
+                        # self.frame_figure = get_plot_zps_polar(self.frame_figure, orders=self.zernike_list_orders,
+                        #                                        step_r=0.005, step_theta=0.9,
+                        #                                        alpha_coefficients=self.alpha_coefficients,
+                        #                                        show_amplitudes=True)
+                        # self.canvas.draw()  # redraw the figure
+        # Below - removing drawn localized spots from the image
+        # Ref.: https://www.adamsmith.haus/python/answers/how-to-remove-a-line-from-a-plot-in-python
+        if self.plot_points is not None:
+            self.plot_points.pop(0).remove(); self.plot_points = None
 
     def camera_ctrl_exit(self):
         """
@@ -1598,3 +1648,7 @@ if __name__ == "__main__":
     rootTk = tk.Tk()  # toplevel widget of Tk there the class - child of tk.Frame is embedded
     reconstructor_gui = ReconstructionUI(rootTk)
     reconstructor_gui.mainloop()
+    if reconstructor_gui.coms_shifts is not None and reconstructor_gui.coms_aberrated is not None:
+        coms_shifts = reconstructor_gui.coms_shifts
+        coms_aberrated = reconstructor_gui.coms_aberrated
+        coms_nonaberrated = reconstructor_gui.coms_spots

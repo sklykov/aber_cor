@@ -93,6 +93,10 @@ class MessagesPrinter(Thread):
                         if message == "Stop Messages Printer" or message == "Stop" or message == "Stop Program":
                             # print("Messages Printer stopped")
                             running = False; break
+                        # The condition below allows to prevent getting out the important message about
+                        # initialization process for only printing it but not processing
+                        elif "available" in message or "initialized" in message:
+                            self.messages_queue.put_nowait(message); time.sleep(2*self.period_checks_ms/1000)
                         else:
                             print(message)
 
