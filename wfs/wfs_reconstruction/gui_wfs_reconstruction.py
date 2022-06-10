@@ -975,6 +975,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibration_activation = False  # for activating the button for calibration window open
             self.coms_shifts = None; self.coms_aberrated = None
             self.__flag_live_localization = False; self.reconstruction_updater = None
+            self.__flag_live_image_updater = True  # default - for displaying live streamed images
 
             # Buttons creation
             self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
@@ -996,6 +997,36 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.live_reconstruction_button.config(state="disabled")
             self.get_focal_spots_button = tk.Button(master=self.camera_ctrl_window, text="Start Localization",
                                                     command=self.live_localize_spots, fg='green')
+
+            # Threshold value ctrls and packing
+            self.threshold_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
+            self.threshold_label_lvRec = tk.Label(master=self.threshold_frame_lvRec, text="Threshold(1..254): ")
+            self.threshold_label_lvRec.pack(side='left', padx=1, pady=1)
+            self.default_threshold = 110
+            self.threshold_value_lvRec = tk.IntVar(); self.threshold_value_lvRec.set(self.default_threshold)
+            # self.threshold_value.trace_add(mode="write", callback=self.validate_threshold)
+            self.threshold_ctrl_box_lvRec = tk.Spinbox(master=self.threshold_frame_lvRec, from_=1, to=254,
+                                                       increment=1, textvariable=self.threshold_value_lvRec,
+                                                       wrap=True, width=4)   # adapt Spinbox to 4 digits in int
+            self.threshold_ctrl_box_lvRec.pack(side='left', padx=1, pady=1)
+
+            # Radius of sub-apertures ctrls and packing
+            self.radius_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
+            self.radius_label_lvRec = tk.Label(master=self.radius_frame_lvRec, text="Sub-ap. radius(px): ")
+            self.radius_label_lvRec.pack(side='left', padx=1, pady=1)
+            self.default_radius = 10.0
+            self.radius_value_lvRec = tk.DoubleVar(); self.radius_value_lvRec.set(self.default_radius)
+            # self.radius_value_lvRec.trace_add(mode="write", callback=self.validate_radius)
+            self.radius_ctrl_box_lvRec = tk.Spinbox(master=self.radius_frame_lvRec, from_=1.0, to=50.0,
+                                                    increment=0.2, textvariable=self.radius_value_lvRec,
+                                                    wrap=True, width=4)   # adapt Spinbox to 4 digits in double
+            self.radius_ctrl_box_lvRec.pack(side='left', padx=1, pady=1)
+
+            # Provide selection of reconstruction views - spots or reconstructed profile
+            self.views = ["Detected Spots", "Coefficients"]; self.selected_view = tk.StringVar()
+            self.selected_view.set(self.views[0])
+            self.view_selector = tk.OptionMenu(self.camera_ctrl_window, self.selected_view, *self.views,
+                                               command=self.switch_reconstructed_view)
 
             # Exposure time control
             self.exposure_t_ms_box = tk.Frame(master=self.camera_ctrl_window)
@@ -1101,7 +1132,12 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                     image = None
                     print("The snap image not acquired, timeout reached")
                 # Represent image on the figure (associated widget)
-                if not(isinstance(image, str)) and (image is not None):
+                if not(isinstance(image, str)) and (image is not None) and isinstance(image, np.ndarray):
+                    # Remove 3rd dimension from camera image for correct working of the cursor data update
+                    if len(image.shape) > 2:
+                        image = np.squeeze(image, axis=2)
+                    self.current_image = image  # save it as single element available for other Threads
+                    # For example, it will be available for Calibration and live spot detection
                     self.show_image(image)
                     # Activate below the button for calibration starting
                     if not self.calibration_activation:
@@ -1170,7 +1206,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                     # Remove 3rd dimension from camera image for correct working of the cursor data update
                     if len(image.shape) > 2:
                         image = np.squeeze(image, axis=2)
-                    self.show_image(image)  # call the function for image refreshing
+                    self.current_image = image  # save it as single element available for other Threads
+                    # For example, it will be available for Calibration and live spot detection
+                    # Below flag - for switching off the live stream displaying
+                    if self.__flag_live_image_updater:
+                        self.show_image(image)  # call the function for image refreshing
                     # Activate below the button for calibration starting
                     if not self.calibration_activation:
                         self.calibration_activation = True
@@ -1194,7 +1234,6 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        self.current_image = image  # save it as the class instance for reusing in Calibration
         # Initialize the AxesImage if this function called 1st time
         if image is not None and isinstance(image, np.ndarray) and self.imshowing is None:
             # Function below returns matplotlib.image.AxesImage class - need for further reference
@@ -1474,32 +1513,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibration_activate_button.config(state="disabled")
             self.get_focal_spots_button.grid(row=6, rowspan=1, column=1, columnspan=1,
                                              padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
-
-            # Threshold value ctrls and packing
-            self.threshold_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
-            self.threshold_label_lvRec = tk.Label(master=self.threshold_frame_lvRec, text="Threshold(1..254): ")
-            self.threshold_label_lvRec.pack(side='left', padx=1, pady=1)
-            self.default_threshold = 110
-            self.threshold_value_lvRec = tk.IntVar(); self.threshold_value_lvRec.set(self.default_threshold)
-            # self.threshold_value.trace_add(mode="write", callback=self.validate_threshold)
-            self.threshold_ctrl_box_lvRec = tk.Spinbox(master=self.threshold_frame_lvRec, from_=1, to=254,
-                                                       increment=1, textvariable=self.threshold_value_lvRec,
-                                                       wrap=True, width=4)   # adapt Spinbox to 4 digits in int
-            self.threshold_ctrl_box_lvRec.pack(side='left', padx=1, pady=1)
             self.threshold_frame_lvRec.grid(row=6, rowspan=1, column=2, columnspan=1,
                                             padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
-
-            # Radius of sub-apertures ctrls and packing
-            self.radius_frame_lvRec = tk.Frame(master=self.camera_ctrl_window)  # for holding ctrls below
-            self.radius_label_lvRec = tk.Label(master=self.radius_frame_lvRec, text="Sub-ap. radius(px): ")
-            self.radius_label_lvRec.pack(side='left', padx=1, pady=1)
-            self.default_radius = 10.0
-            self.radius_value_lvRec = tk.DoubleVar(); self.radius_value_lvRec.set(self.default_radius)
-            # self.radius_value_lvRec.trace_add(mode="write", callback=self.validate_radius)
-            self.radius_ctrl_box_lvRec = tk.Spinbox(master=self.radius_frame_lvRec, from_=1.0, to=50.0,
-                                                    increment=0.2, textvariable=self.radius_value_lvRec,
-                                                    wrap=True, width=4)   # adapt Spinbox to 4 digits in double
-            self.radius_ctrl_box_lvRec.pack(side='left', padx=1, pady=1)
             self.radius_frame_lvRec.grid(row=6, rowspan=1, column=3, columnspan=1,
                                          padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
             self.plot_points = None
@@ -1507,7 +1522,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             # Buttons show / hide
             self.live_reconstruction_button.config(text="Start Reconstruction", fg='magenta')
             self.live_stream_button.config(state="normal"); self.radius_frame_lvRec.grid_remove()
-            self.calibration_activate_button.config(state="normal")
+            self.calibration_activate_button.config(state="normal"); self.view_selector.grid_remove()
             self.get_focal_spots_button.grid_remove(); self.threshold_frame_lvRec.grid_remove()
 
     def live_localize_spots(self):
@@ -1526,8 +1541,55 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.reconstruction_updater = Thread(target=self.localize_spots_on_thread, args=())
             self.reconstruction_updater.start()  # start the Thread and assigned to it task
             self.get_focal_spots_button.config(text="Stop Localization", fg='red')
+            self.radius_frame_lvRec.grid_remove(); self.threshold_frame_lvRec.grid_remove()
+            self.view_selector.grid(row=6, rowspan=1, column=2, columnspan=1,
+                                    padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
         elif not self.__flag_live_localization:
             self.get_focal_spots_button.config(text="Start Localization", fg='green')
+            self.radius_frame_lvRec.grid(row=6, rowspan=1, column=3, columnspan=1,
+                                         padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.threshold_frame_lvRec.grid(row=6, rowspan=1, column=2, columnspan=1,
+                                            padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
+            self.view_selector.grid_remove()
+
+    def switch_reconstructed_view(self, view: str):
+        """
+        Turn on / off live displaying of images from a camera.
+
+        Parameters
+        ----------
+        view : str
+            Provided by tkinter call with the selected value.
+
+        Returns
+        -------
+        None.
+
+        """
+        # Switch on / off the live displaying of coming from camera images
+        if self.selected_view.get() == "Coefficients":
+            self.__flag_live_image_updater = False; self.imshowing = None
+            if self.plot_points is not None:
+                self.plot_points.pop(0).remove(); self.plot_points = None
+            # Make the external window for the representation of the calculated coefficients
+            y_shift = (int(1.3*self.master.winfo_height())
+                       + int(self.master.winfo_geometry().split("+")[2]))  # vertical shift
+            x_shift = self.master.winfo_x()  # horizontal shift
+            height = self.master.winfo_height(); width = self.master.winfo_width()
+            self.show_coefficients_win = tk.Toplevel(master=self.camera_ctrl_window)
+            self.show_coefficients_win.title("Zernike coefficients")
+            self.show_coefficients_win.geometry(f'{width}x{height}+{x_shift}+{y_shift}')
+        else:
+            # Clear the 2D profile with sum of Zernike coefficients
+            self.frame_figure.clear()  # clear all axes
+            self.frame_figure_axes = self.frame_figure.add_subplot()  # create new axis!
+            self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
+            self.frame_figure.subplots_adjust(left=0, bottom=0, right=1, top=1)  # remove white borders
+            self.imshowing = self.frame_figure_axes.imshow(self.current_image, cmap='plasma',
+                                                           interpolation='none', vmin=0, vmax=255)
+            self.canvas.draw(); time.sleep(self.gui_refresh_rate_ms/1000)
+            self.__flag_live_image_updater = True
+        print("Selected representation of reconstructed coefficients:", view)
 
     def localize_spots_on_thread(self):
         """
@@ -1544,24 +1606,29 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.coms_aberrated = get_coms_fast(image=self.current_image, nonaberrated_coms=self.coms_spots,
                                                 threshold_abs=self.threshold_value_lvRec.get(),
                                                 region_size=region_size)
-            # Below - plotting found spots
+            # Below - plotting found (locali spots
             rows, cols = self.coms_aberrated.shape
             if rows > 0 and cols > 0:
                 (self.coms_shifts, self.integral_matrix_aberrated,
                  self.coms_aberrated) = get_coms_shifts_fast(self.coms_spots, self.integral_matrix,
                                                              self.coms_aberrated)
-                # Use only one sample of plt.lines.Line2D for drawing found spots
-                if self.plot_points is None:
-                    self.plot_points = self.frame_figure_axes.plot(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0],
-                                                                   '.', color="red")
-                else:
-                    self.plot_points[0].set_data(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0])
-                self.canvas.draw_idle()  # redraw image in the widget (stored in canvas)
-                t2 = time.perf_counter(); print("Shifts coms calc. takes sec.:", round((t2-t1), 1))
+                # Show the detected focal spots, if the live stream shown in the GUI
+                if self.__flag_live_image_updater:
+                    # Use only one sample of plt.lines.Line2D for drawing found spots
+                    if self.plot_points is None:
+                        self.plot_points = self.frame_figure_axes.plot(self.coms_aberrated[:, 1],
+                                                                       self.coms_aberrated[:, 0],
+                                                                       '.', color="red")
+                    else:
+                        self.plot_points[0].set_data(self.coms_aberrated[:, 1], self.coms_aberrated[:, 0])
+                    self.canvas.draw_idle()  # redraw image in the widget (stored in canvas)
+                # t2 = time.perf_counter(); print("Shifts coms calc. takes sec.:", round((t2-t1), 1))
                 rows, cols = self.coms_shifts.shape
                 if rows > 0 and cols > 0:
                     self.alpha_coefficients = get_polynomials_coefficients(self.integral_matrix_aberrated,
                                                                            self.coms_shifts)
+                    if np.size(self.alpha_coefficients) > 0:
+                        self.alpha_coefficients = np.round(self.alpha_coefficients, 4)
                     # self.alpha_coefficients *= np.pi  # for adjusting to radians ???
                     self.alpha_coefficients = list(self.alpha_coefficients)
                     if len(self.alpha_coefficients) > 0:
@@ -1569,16 +1636,21 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                         self.order = get_zernike_order_from_coefficients_number(len(self.alpha_coefficients))
                         self.zernike_list_orders = get_zernike_coefficients_list(self.order)
                         print(self.alpha_coefficients)
-                        # t3 = time.perf_counter(); print("Zernike coeff. calc. takes sec.:", round((t3-t2), 1))
-                        # self.frame_figure = get_plot_zps_polar(self.frame_figure, orders=self.zernike_list_orders,
-                        #                                        step_r=0.005, step_theta=0.9,
-                        #                                        alpha_coefficients=self.alpha_coefficients,
-                        #                                        show_amplitudes=True)
-                        # self.canvas.draw()  # redraw the figure
+                        if not self.__flag_live_image_updater:
+                            # below - function for drawing 2D Zernike polynomials coefficients sum
+                            self.frame_figure = get_plot_zps_polar(self.frame_figure, orders=self.zernike_list_orders,
+                                                                   step_r=0.01, step_theta=1.0,
+                                                                   alpha_coefficients=self.alpha_coefficients,
+                                                                   show_amplitudes=True)
+                            self.canvas.draw()  # redraw the figure
+                        t3 = time.perf_counter(); print("Coeff-s calc./showing takes sec.:", round((t3-t1), 1))
         # Below - removing drawn localized spots from the image
         # Ref.: https://www.adamsmith.haus/python/answers/how-to-remove-a-line-from-a-plot-in-python
         if self.plot_points is not None:
             self.plot_points.pop(0).remove(); self.plot_points = None
+        # Return to normal representation if this function stop running (reconstruction stopped)
+        if not self.__flag_live_image_updater:
+            self.selected_view.set(self.views[0]); self.switch_reconstructed_view(self.views[0])
 
     def camera_ctrl_exit(self):
         """
