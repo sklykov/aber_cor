@@ -976,6 +976,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.coms_shifts = None; self.coms_aberrated = None
             self.__flag_live_localization = False; self.reconstruction_updater = None
             self.__flag_live_image_updater = True  # default - for displaying live streamed images
+            self.__flag_update_amplitudes = False  # additional flag to stop updating the amplitudes
+            self.amplitudes_figure = None; self.amplitudes_figure_axes = None
+            self.amplitudes_showing = None
 
             # Buttons creation
             self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
@@ -1173,6 +1176,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.image_updater.start()  # start the Thread and assigned to it task
         # Stop Live Stream
         else:
+            if self.__flag_live_localization:
+                time.sleep(10*self.gui_refresh_rate_ms/1000)  # additional delay for stopping reconstructions
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
             self.live_stream_button.config(text="Start Live", fg='green')
@@ -1569,8 +1574,11 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Switch on / off the live displaying of coming from camera images
         if self.selected_view.get() == "Coefficients":
             self.__flag_live_image_updater = False; self.imshowing = None
+            time.sleep(self.gui_refresh_rate_ms/1000)  # for stopping the live updater
             if self.plot_points is not None:
                 self.plot_points.pop(0).remove(); self.plot_points = None
+            time.sleep(self.gui_refresh_rate_ms/1000)
+            self.__flag_update_amplitudes = True  # allowing to make amplitudes graph
             # Make the external window for the representation of the calculated coefficients
             y_shift = (int(1.3*self.master.winfo_height())
                        + int(self.master.winfo_geometry().split("+")[2]))  # vertical shift
@@ -1579,7 +1587,22 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.show_coefficients_win = tk.Toplevel(master=self.camera_ctrl_window)
             self.show_coefficients_win.title("Zernike coefficients")
             self.show_coefficients_win.geometry(f'{width}x{height}+{x_shift}+{y_shift}')
+            # Create the holder for plots - figure and associated axes
+            if self.amplitudes_figure is None:
+                self.amplitudes_figure = plot_figure.Figure()
+            self.amplitudes_canvas = FigureCanvasTkAgg(self.amplitudes_figure,
+                                                       master=self.show_coefficients_win)
+            self.amplitudes_canvas.draw()
+            self.amplitudes_widget = self.amplitudes_canvas.get_tk_widget()
+            self.amplitudes_widget.pack(side='top', padx=2, pady=2)
+            # FIXME: 1) layout; 2) close handling (switching between views); 3) representation (redraw)
+            if self.amplitudes_figure_axes is None:
+                self.amplitudes_figure_axes = self.amplitudes_figure.add_subplot()
+                # self.amplitudes_figure.tight_layout()
+                self.amplitudes_figure.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.9)
         else:
+            self.__flag_update_amplitudes = False
+            time.sleep(10*self.gui_refresh_rate_ms/1000)  # put some delay for prevent draw on refresh image
             # Clear the 2D profile with sum of Zernike coefficients
             self.frame_figure.clear()  # clear all axes
             self.frame_figure_axes = self.frame_figure.add_subplot()  # create new axis!
@@ -1588,6 +1611,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.imshowing = self.frame_figure_axes.imshow(self.current_image, cmap='plasma',
                                                            interpolation='none', vmin=0, vmax=255)
             self.canvas.draw(); time.sleep(self.gui_refresh_rate_ms/1000)
+            self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
+            self.plot_toolbar.update()
             self.__flag_live_image_updater = True
         print("Selected representation of reconstructed coefficients:", view)
 
@@ -1636,13 +1661,23 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                         self.order = get_zernike_order_from_coefficients_number(len(self.alpha_coefficients))
                         self.zernike_list_orders = get_zernike_coefficients_list(self.order)
                         print(self.alpha_coefficients)
-                        if not self.__flag_live_image_updater:
+                        if not self.__flag_live_image_updater and self.__flag_update_amplitudes:
                             # below - function for drawing 2D Zernike polynomials coefficients sum
-                            self.frame_figure = get_plot_zps_polar(self.frame_figure, orders=self.zernike_list_orders,
+                            self.frame_figure = get_plot_zps_polar(self.frame_figure,
+                                                                   orders=self.zernike_list_orders,
                                                                    step_r=0.01, step_theta=1.0,
                                                                    alpha_coefficients=self.alpha_coefficients,
                                                                    show_amplitudes=True)
                             self.canvas.draw()  # redraw the figure
+                            # ???
+                            names = ['(-1, 1)', '(1, 1)', '(-2, 2)', '(0, 2)', '(2, 2)',
+                                     '(-3, 3)', '(-1, 3)', '(1, 3)', '(3, 3)', '(-4, 4)',
+                                     '(-2, 4)', '(0, 4)', '(2, 4)', '(4, 4)']
+                            if self.amplitudes_showing is not None:
+                                self.amplitudes_showing.remove()
+                            self.amplitudes_showing = self.amplitudes_figure_axes.bar(names,
+                                                                                      self.alpha_coefficients)
+                            self.amplitudes_canvas.draw_idle()
                         t3 = time.perf_counter(); print("Coeff-s calc./showing takes sec.:", round((t3-t1), 1))
         # Below - removing drawn localized spots from the image
         # Ref.: https://www.adamsmith.haus/python/answers/how-to-remove-a-line-from-a-plot-in-python
