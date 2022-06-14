@@ -212,7 +212,8 @@ def plot_zps_polar(orders: list, step_r: float = 0.005, step_theta: float = 0.5,
 
 
 def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: float = 0.01,
-                       step_theta: float = 1.0, show_amplitudes: bool = False):
+                       step_theta: float = 1.0, show_amplitudes: bool = False,
+                       clear_axes: bool = True):
     """
     Plot Zernike's polynomials sum ("zps") in polar projection for the unit radius circle on the input matplotlib. figure instance.
 
@@ -229,7 +230,9 @@ def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: f
     step_theta : float, optional
         Step (in grades) for calculation of angle for a summing map (colormap). The default is 1.0.
     show_amplitudes : bool, optional
-        Shows the colour-bar on the plot with amplitudes. The default is False.
+        Show the colour-bar on the plot with amplitudes. The default is False.
+    clear_axes : bool, optional
+        Clear the axes on the figure. The default is True.
 
     Raises
     ------
@@ -245,7 +248,9 @@ def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: f
     R, Theta, S = zernike_polynomials_sum_tuned(orders, alpha_coefficients, step_r=step_r, step_theta=step_theta)
     # Plotting and formatting - Polar projection + plotting the colormap as colour mesh
     # Below - clearing of picture axes, for preventing adding many axes to the single figure
-    figure.clear(); axes = figure.add_subplot(projection='polar')  # axes - the handle for drawing functions
+    if clear_axes:
+        figure.clear()  # additional flag for the clearing of figure
+    axes = figure.add_subplot(projection='polar')  # axes - the handle for drawing functions
     # Below - manual deletion and reinitializing of axes
     # if figure.get_axes() == []:
     #     axes = figure.add_subplot(projection='polar')  # axes - the handle for drawing functions
@@ -260,6 +265,7 @@ def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: f
     axes.set_theta_direction(-1)  # the counterclockwise counting of angle switched to clockwise!
     if show_amplitudes:
         figure.colorbar(im, ax=axes)  # shows the colour bar with shown on image amplitudes
+    figure.subplots_adjust(left=0, bottom=0, right=1, top=1)
     figure.tight_layout()
     return figure
 

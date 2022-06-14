@@ -44,7 +44,7 @@ if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__m
                                               get_zernike_order_from_coefficients_number, get_coms_fast,
                                               get_coms_shifts_fast)
     from calc_zernikes_sh_wfs import get_polynomials_coefficients
-    from zernike_pol_calc import get_plot_zps_polar
+    from zernike_pol_calc import get_plot_zps_polar, zernike_polynomials_sum_tuned
     import camera as cam  # for accessing controlling wrapper for the cameras (simulated and IDS)
 else:  # relative imports for resolving these dependencies in the case of import as module from a package
     from .reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
@@ -53,7 +53,7 @@ else:  # relative imports for resolving these dependencies in the case of import
                                                get_zernike_order_from_coefficients_number, get_coms_fast,
                                                get_coms_shifts_fast)
     from .calc_zernikes_sh_wfs import get_polynomials_coefficients
-    from .zernike_pol_calc import get_plot_zps_polar
+    from .zernike_pol_calc import get_plot_zps_polar, zernike_polynomials_sum_tuned
     from . import camera as cam   # for accessing controlling wrapper for the cameras (simulated and IDS)
     print("Implicit usage of camera module, list of importable modules: ", cam.__all__)
 
@@ -978,7 +978,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.__flag_live_image_updater = True  # default - for displaying live streamed images
             self.__flag_update_amplitudes = False  # additional flag to stop updating the amplitudes
             self.amplitudes_figure = None; self.amplitudes_figure_axes = None
-            self.amplitudes_showing = None
+            self.amplitudes_showing = None; self.__flag_bar_plot = False
+            self.frame_figure_pcolormesh = None
 
             # Buttons creation
             self.single_snap_button = tk.Button(master=self.camera_ctrl_window, text="Snap single image",
@@ -1177,7 +1178,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Stop Live Stream
         else:
             if self.__flag_live_localization:
-                time.sleep(10*self.gui_refresh_rate_ms/1000)  # additional delay for stopping reconstructions
+                self.live_localize_spots()
+                time.sleep(5*self.gui_refresh_rate_ms/1000)  # additional delay for stopping reconstructions
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
             self.live_stream_button.config(text="Start Live", fg='green')
@@ -1539,8 +1541,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        time.sleep(2*self.gui_refresh_rate_ms/1000)
         self.__flag_live_localization = not self.__flag_live_localization
+        time.sleep(10*self.gui_refresh_rate_ms/1000)
         if self.__flag_live_stream and self.__flag_live_localization:
             # refresh of displayed images process => evoked Thread
             self.reconstruction_updater = Thread(target=self.localize_spots_on_thread, args=())
@@ -1572,12 +1574,19 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         # Switch on / off the live displaying of coming from camera images
-        if self.selected_view.get() == "Coefficients":
+        if view == "Coefficients":
             self.__flag_live_image_updater = False; self.imshowing = None
             time.sleep(self.gui_refresh_rate_ms/1000)  # for stopping the live updater
             if self.plot_points is not None:
                 self.plot_points.pop(0).remove(); self.plot_points = None
-            time.sleep(self.gui_refresh_rate_ms/1000)
+            time.sleep(6*self.gui_refresh_rate_ms/1000)
+            # See the set up example in get_plot_zps_polar()
+            self.frame_figure.clear()  # clear the axes from figure
+            self.frame_figure_axes = self.frame_figure.add_subplot(projection='polar')
+            self.frame_figure_axes.grid(False); self.frame_figure_axes.axis('off')
+            self.frame_figure_axes.set_theta_direction(-1)
+            self.frame_figure.subplots_adjust(left=0, bottom=0, right=1, top=1)
+            self.frame_figure.tight_layout()
             self.__flag_update_amplitudes = True  # allowing to make amplitudes graph
             # Make the external window for the representation of the calculated coefficients
             y_shift = (int(1.3*self.master.winfo_height())
@@ -1587,6 +1596,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.show_coefficients_win = tk.Toplevel(master=self.camera_ctrl_window)
             self.show_coefficients_win.title("Zernike coefficients")
             self.show_coefficients_win.geometry(f'{width}x{height}+{x_shift}+{y_shift}')
+            self.show_coefficients_win.protocol("WM_DELETE_WINDOW", self.show_coefficients_win_close)
             # Create the holder for plots - figure and associated axes
             if self.amplitudes_figure is None:
                 self.amplitudes_figure = plot_figure.Figure()
@@ -1595,16 +1605,15 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.amplitudes_canvas.draw()
             self.amplitudes_widget = self.amplitudes_canvas.get_tk_widget()
             self.amplitudes_widget.pack(side='top', padx=2, pady=2)
-            # FIXME: 1) layout; 2) close handling (switching between views); 3) representation (redraw)
-            if self.amplitudes_figure_axes is None:
-                self.amplitudes_figure_axes = self.amplitudes_figure.add_subplot()
-                # self.amplitudes_figure.tight_layout()
-                self.amplitudes_figure.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.9)
+            self.__flag_bar_plot = True  # for enabling plotting bars
         else:
             self.__flag_update_amplitudes = False
-            time.sleep(10*self.gui_refresh_rate_ms/1000)  # put some delay for prevent draw on refresh image
+            self.show_coefficients_win_close()
+            time.sleep(12*self.gui_refresh_rate_ms/1000)  # put some delay for prevent draw on refresh image
             # Clear the 2D profile with sum of Zernike coefficients
             self.frame_figure.clear()  # clear all axes
+            time.sleep(self.gui_refresh_rate_ms/1000)  # put some delay for cleaning
+            self.frame_figure_pcolormesh = None
             self.frame_figure_axes = self.frame_figure.add_subplot()  # create new axis!
             self.frame_figure_axes.axis('off'); self.frame_figure.tight_layout()
             self.frame_figure.subplots_adjust(left=0, bottom=0, right=1, top=1)  # remove white borders
@@ -1612,8 +1621,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                                                            interpolation='none', vmin=0, vmax=255)
             self.canvas.draw(); time.sleep(self.gui_refresh_rate_ms/1000)
             self.plot_toolbar = NavigationToolbar2Tk(self.canvas, self.camera_ctrl_window, pack_toolbar=False)
-            self.plot_toolbar.update()
-            self.__flag_live_image_updater = True
+            self.plot_toolbar.update(); self.__flag_live_image_updater = True
         print("Selected representation of reconstructed coefficients:", view)
 
     def localize_spots_on_thread(self):
@@ -1660,24 +1668,56 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                         # Define below used orders of Zernikes and providing them for amplitudes calculation
                         self.order = get_zernike_order_from_coefficients_number(len(self.alpha_coefficients))
                         self.zernike_list_orders = get_zernike_coefficients_list(self.order)
-                        print(self.alpha_coefficients)
+                        # print(self.alpha_coefficients)  # for debugging
                         if not self.__flag_live_image_updater and self.__flag_update_amplitudes:
                             # below - function for drawing 2D Zernike polynomials coefficients sum
-                            self.frame_figure = get_plot_zps_polar(self.frame_figure,
-                                                                   orders=self.zernike_list_orders,
-                                                                   step_r=0.01, step_theta=1.0,
-                                                                   alpha_coefficients=self.alpha_coefficients,
-                                                                   show_amplitudes=True)
-                            self.canvas.draw()  # redraw the figure
-                            # ???
-                            names = ['(-1, 1)', '(1, 1)', '(-2, 2)', '(0, 2)', '(2, 2)',
-                                     '(-3, 3)', '(-1, 3)', '(1, 3)', '(3, 3)', '(-4, 4)',
-                                     '(-2, 4)', '(0, 4)', '(2, 4)', '(4, 4)']
-                            if self.amplitudes_showing is not None:
-                                self.amplitudes_showing.remove()
-                            self.amplitudes_showing = self.amplitudes_figure_axes.bar(names,
-                                                                                      self.alpha_coefficients)
-                            self.amplitudes_canvas.draw_idle()
+                            # Explicit call for making the pcolormesh plot
+                            R, Theta, S = zernike_polynomials_sum_tuned(self.zernike_list_orders,
+                                                                        self.alpha_coefficients,
+                                                                        step_r=0.01, step_theta=1.0)
+                            # Get the sample of
+                            if self.frame_figure_pcolormesh is None:
+                                self.frame_figure_pcolormesh = self.frame_figure_axes.pcolormesh(Theta, R, S,
+                                                                                                 cmap='coolwarm',
+                                                                                                 shading='nearest')
+                                # shows the colour bar on the figure
+                                self.frame_figure_colorbar = self.frame_figure.colorbar(self.frame_figure_pcolormesh,
+                                                                                        ax=self.frame_figure_axes)
+                                self.canvas.draw_idle()  # redraw the figure
+                            else:
+                                # Updating the colormesh figure using the method of a QuadMesh class
+                                # self.frame_figure_pcolormesh.set_array(S)
+                                # Unfortunately, simple updating of array values doesn't provide the automatic
+                                # update of colorbar. Therefore, below pcolormesh and colorbar deleted and re-created
+                                self.frame_figure_colorbar.remove(); self.frame_figure_pcolormesh.remove()
+                                self.frame_figure_pcolormesh = self.frame_figure_axes.pcolormesh(Theta, R, S,
+                                                                                                 cmap='coolwarm',
+                                                                                                 shading='nearest')
+                                self.frame_figure_colorbar = self.frame_figure.colorbar(self.frame_figure_pcolormesh,
+                                                                                        ax=self.frame_figure_axes)
+
+                                self.canvas.draw_idle()
+                            # Plot coefficients (amplitudes) as bars on the external window
+                            if self.__flag_bar_plot:
+                                if self.amplitudes_figure_axes is None:
+                                    self.make_amplitudes_subplots()  # see the wrapper function
+                                else:
+                                    if self.amplitudes_showing is not None:
+                                        # Bars updating using the method of a BarContainer class
+                                        # Unfortunately, the command below doesn't send automatic command
+                                        # to update the axes parameters
+                                        # i = 0
+                                        # for bar in self.amplitudes_showing:
+                                        #     bar.set_height(self.alpha_coefficients[i]); i += 1
+                                        # Because of the reason above, the dirty hack now is to remove /
+                                        # recreate bar plots
+                                        self.amplitudes_showing.remove()
+                                        self.amplitudes_showing = self.amplitudes_figure_axes.bar(self.names,
+                                                                                                  self.alpha_coefficients,
+                                                                                                  color='blue')
+                                self.amplitudes_canvas.draw_idle()
+                                # FIXME: Made drawing on the main thread! Instead of process now
+                                # or made it wrapped to another function as update_image above
                         t3 = time.perf_counter(); print("Coeff-s calc./showing takes sec.:", round((t3-t1), 1))
         # Below - removing drawn localized spots from the image
         # Ref.: https://www.adamsmith.haus/python/answers/how-to-remove-a-line-from-a-plot-in-python
@@ -1686,6 +1726,41 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         # Return to normal representation if this function stop running (reconstruction stopped)
         if not self.__flag_live_image_updater:
             self.selected_view.set(self.views[0]); self.switch_reconstructed_view(self.views[0])
+
+    def make_amplitudes_subplots(self):
+        """
+        Make the subplots for representation of calculated Zernike polynomial coefficients.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.amplitudes_figure_axes is None:
+            self.amplitudes_figure_axes = self.amplitudes_figure.add_subplot()
+            self.amplitudes_figure.subplots_adjust(left=0.08, bottom=0.16, right=0.98, top=0.98)
+        if self.amplitudes_showing is None:
+            self.names = []
+            for mode in self.zernike_list_orders:
+                mode = str(mode).replace(" ", ""); self.names.append("Z"+mode)
+            self.amplitudes_showing = self.amplitudes_figure_axes.bar(self.names,
+                                                                      self.alpha_coefficients,
+                                                                      color='blue')
+            self.amplitudes_figure.tight_layout()
+
+    def show_coefficients_win_close(self):
+        """
+        Handle close window with plotting bars with the Zernike polynomials coefficients.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.__flag_bar_plot = False
+        time.sleep(10*self.gui_refresh_rate_ms/1000)  # for ensuring that the drawing of bars stopped
+        self.amplitudes_figure = None
+        self.show_coefficients_win.destroy()
 
     def camera_ctrl_exit(self):
         """
@@ -1696,7 +1771,10 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
+        if self.__flag_bar_plot:
+            self.show_coefficients_win_close()
         self.close_current_camera()
+        time.sleep(2*self.gui_refresh_rate_ms/1000)
         if self.exceptions_checker.is_alive():
             self.exceptions_queue.put_nowait("Stop Exception Checker")
             # The problem is here, that Thread below somehow waits for exit action, so
