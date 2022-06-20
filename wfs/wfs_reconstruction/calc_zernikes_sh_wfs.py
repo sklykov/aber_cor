@@ -9,7 +9,7 @@ According to the doctoral thesis by Antonello, J. (2014): https://doi.org/10.423
 @license: GPLv3
 """
 
-# %% Imports - global dependecies (from standard library and installed by conda / pip)
+# %% Imports - global dependencies (from standard library and installed by conda / pip)
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import io
@@ -23,9 +23,9 @@ from numpy.linalg import lstsq
 from pathlib import Path
 plt.close('all')
 
-# %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
+# %% Imports - local dependencies (modules / packages in the containing it folder / sub-folders)
 if __name__ == "__main__" or __name__ == Path(__file__).stem:
-    # Actual call as the standalone module or from other module from this package (as a dependecy)
+    # Actual call as the standalone module or from other module from this package (as a dependency)
     from zernike_pol_calc import (radial_polynomial, radial_polynomial_derivative_dr, triangular_function,
                                   triangular_derivative_dtheta, normalization_factor,
                                   tabular_radial_polynomial, tabular_radial_derivative_dr)

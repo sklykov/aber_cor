@@ -9,7 +9,7 @@ According to the doctoral thesis by Antonello, J. (2014): https://doi.org/10.423
 @license: GPLv3
 """
 
-# %% Imports - global dependecies (from standard library and installed by conda / pip)
+# %% Imports - global dependencies (from standard library and installed by conda / pip)
 import numpy as np
 from skimage.feature import peak_local_max
 # import time
@@ -20,9 +20,9 @@ from threading import Thread
 from queue import Empty, Queue
 from pathlib import Path
 
-# %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
+# %% Imports - local dependencies (modules / packages in the containing it folder / sub-folders)
 if __name__ == "__main__" or __name__ == Path(__file__).stem:
-    # Actual call as the standalone module or from other module from this package (as a dependecy)
+    # Actual call as the standalone module or from other module from this package (as a dependency)
     from zernike_pol_calc import normalization_factor
     from calc_zernikes_sh_wfs import (rho_ab, rho_integral_funcX, rho_integral_funcY, check_img_coordinate,
                                       r_integral_tabular_funcX, r_integral_tabular_funcY)
@@ -87,8 +87,8 @@ def get_coms_fast(image: np.ndarray, nonaberrated_coms: np.ndarray,
     ----------
     image : np.ndarray
         Shack-Hartmann image with focal spots of focused wavefront.
-    axes_fig : matplotlib.Axes
-        Class of the figure shown in the GUI widget (window).
+    nonaberrated_coms: np.ndarray
+        Loaded or localized in the program focal spots of the plane wavefront.
     threshold_abs : float, optional
         Absolute minimal intensity value for start searching of a local peak. The default is 55.0.
     region_size : int, optional
@@ -543,7 +543,7 @@ def get_coms_shifts_fast(coms_nonaberrated: np.ndarray, integral_matrix: np.ndar
         (shifts of CoMs, integral matrix, aberrated CoMs).
 
     """
-    # Delete peaks with negative coordinates (less then absolute threshold, defined before)
+    # Delete peaks with negative coordinates (less than absolute threshold, defined before)
     size = np.size(coms_aberrated, 0)
     coms_shifts = np.zeros((np.size(coms_aberrated, 0), 2), dtype='float')  # Shifts between CoMs
     for i in range(np.size(coms_aberrated, 0)):
@@ -557,7 +557,7 @@ def get_coms_shifts_fast(coms_nonaberrated: np.ndarray, integral_matrix: np.ndar
             coms_shifts[i, 1] = diffX_sign  # Direction of X axis is the same as on the picture (from left to right)
     j = 0
     # Delete non-detected spots
-    while(j < size):
+    while j < size:
         if coms_aberrated[j, 0] == -1 and coms_aberrated[j, 1] == -1:
             coms_aberrated = np.delete(coms_aberrated, j, axis=0)
             coms_shifts = np.delete(coms_shifts, j, axis=0)
@@ -566,7 +566,7 @@ def get_coms_shifts_fast(coms_nonaberrated: np.ndarray, integral_matrix: np.ndar
         else:
             j += 1
 
-    return (coms_shifts, integral_matrix, coms_aberrated)
+    return coms_shifts, integral_matrix, coms_aberrated
 
 
 # %% Threaded class for integral matrix calculation

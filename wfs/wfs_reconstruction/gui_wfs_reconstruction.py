@@ -14,7 +14,7 @@ Reference
 
 """
 
-# %% Imports - global dependecies (from standard library and installed by conda / pip)
+# %% Imports - global dependencies (from standard library and installed by conda / pip)
 import tkinter as tk
 from tkinter import font
 from tkinter.ttk import Progressbar
@@ -33,11 +33,11 @@ import ctypes
 from multiprocessing import Queue as mpQueue
 from threading import Thread
 
-# %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
+# %% Imports - local dependencies (modules / packages in the containing it folder / sub-folders)
 print("Calling signature:", __name__)  # inspection of called signature
 if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__mp_main__":
-    # ???: Last condition arised because of attempt to reload modules then additional Process launched, seems
-    # Actual call as the standalone module or from other module from this package (as a dependecy)
+    # ???: Last condition arisen because of attempt to reload modules then additional Process launched, seems
+    # Actual call as the standalone module or from other module from this package (as a dependency)
     # Note that in this case this module is aware only about modules / packages in the same folder
     from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
                                               get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
@@ -135,7 +135,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.default_path_display.delete(0.0, 'end')  # clean previously assigned path
             self.default_path_display.insert('end', "Default path to calibration files: \n", ('header path',))
             self.default_path_display.tag_config('header path', justify=tk.CENTER)
-            self.default_path_display.insert('end', (self.calibration_path))
+            self.default_path_display.insert('end', self.calibration_path)
             self.spots_path = os.path.join(self.calibration_path, "detected_focal_spots.npy")
             self.integralM_path = os.path.join(self.calibration_path, "integral_calibration_matrix.npy")
             if os.path.exists(self.spots_path):
@@ -977,7 +977,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.calibration_activation = False  # for activating the button for calibration window open
             self.coms_shifts = None; self.coms_aberrated = None
             self.__flag_live_localization = False; self.reconstruction_updater = None
-            self.__flag_live_image_updater = True  # default - for displaying live streamed images
+            self.__flag_live_image_updater = True  # default - for displaying live-streamed images
             self.__flag_update_amplitudes = False  # additional flag to stop updating the amplitudes
             self.amplitudes_figure = None; self.amplitudes_figure_axes = None
             self.amplitudes_showing = None; self.__flag_bar_plot = False
@@ -1209,7 +1209,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         """
         time.sleep(1.25*self.exposure_t_ms/1000)  # initial delay before querying for a new image from a queue
         delay = 1.04*self.exposure_t_ms  # delay specification for stream of querying for a new image
-        while(self.__flag_live_stream):
+        while self.__flag_live_stream:
             # t1 = time.perf_counter()
             try:
                 image = self.images_queue.get_nowait()  # get new image from a queue
@@ -1260,13 +1260,13 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.canvas.draw()
         else:
             # !!! Calling backend canvas for re-drawing of updated image in the idle state (draw_idle())
-            # that is more effective then call self.canvas.draw()
+            # that is more effective than call self.canvas.draw()
             self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw_idle()
 
     def format_coord(self, x, y):
         """
-        Re-implementation of default matplotlib function that failed after live streaming launch.
+        Re-implementation of default matplotlib function that failed after live-streaming launch.
 
         Reference
         ---------
@@ -1303,7 +1303,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if self.camera_handle is not None:
-            # If there is live streaming going on, just first call the function to stop it
+            # If there is live-streaming going on, just first call the function to stop it
             if self.__flag_live_stream:
                 self.live_stream()
                 time.sleep(2*self.gui_refresh_rate_ms/1000)  # additional delay
@@ -1363,13 +1363,13 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             time.sleep(self.gui_refresh_rate_ms/1000)
         # Wait the confirmation that camera initialized
         camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
-        if self.gui_refresh_rate_ms > 0 and self.gui_refresh_rate_ms < 1000:
+        if 0 < self.gui_refresh_rate_ms < 1000:
             attempts = 6000//self.gui_refresh_rate_ms  # number of attempts to receive initialized message ~ 6 sec.
         else:
             attempts = 600
         i = 0  # counting attempts
-        wait_camera = False  # for separate 2 events: import controlling library and confiramtion from a camera
-        while(not camera_initialized_flag and i <= attempts):
+        wait_camera = False  # for separate 2 events: import controlling library and confirmation from a camera
+        while not camera_initialized_flag and i <= attempts:
             if not self.camera_messages.empty():
                 try:
                     message = self.camera_messages.get_nowait()
@@ -1485,7 +1485,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             time.sleep((2*self.gui_refresh_rate_ms)/1000)
             if not self.camera_messages.empty():
                 try:
-                    # Checking the answeer about actually set exposure time from the camera
+                    # Checking the answer about actually set exposure time from the camera
                     message = self.camera_messages.get_nowait()
                     exp_t = message.split(":")[1]; exp_t = round(float(exp_t), 2)
                     self.exposure_t_ms_ctrl.set(exp_t); print(message)
@@ -1494,7 +1494,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
     def open_calibration(self):
         """
-        Open calibration window and trasnfer last image to it.
+        Open calibration window and transfer last image to it.
 
         Returns
         -------
@@ -1502,7 +1502,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if self.__flag_live_stream:
-            self.live_stream()  # stop live streaming, if it runs
+            self.live_stream()  # stop live-streaming, if it runs
         self.calibrate(True)  # open calibration window and transfer the current displayed image there
         self.camera_ctrl_exit()  # closes the camera controlling window, stop live stream
 
@@ -1515,9 +1515,9 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        self.live_stream()  # call to the live stream initiliazation or stop
+        self.live_stream()  # call to the live stream initialization or stop
         self.live_reconstruction_button.config(state="normal")  # because it's disabled by self.live_stream()
-        # Disable / enable calinbration feature and Stop Live / Start Live + put additional controls
+        # Disable / enable calibration feature and Stop Live / Start Live + put additional controls
         if self.__flag_live_stream:
             self.live_reconstruction_button.config(text="Stop Reconstruction", fg='red',
                                                    padx=self.camera_ctrl_pad, pady=self.camera_ctrl_pad)
@@ -1607,7 +1607,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if self.plot_points is not None:
                 self.plot_points.pop(0).remove(); self.plot_points = None
             time.sleep(self.gui_refresh_rate_ms/1000)
-            # See the set up example in get_plot_zps_polar()
+            # See the setting up example in get_plot_zps_polar()
             if self.frame_figure_axes is not None:
                 self.frame_figure_axes.remove(); self.frame_figure_axes = None  # clear the axes
             self.frame_figure_axes = self.frame_figure.add_subplot(projection='polar')
@@ -1673,13 +1673,13 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
         None.
 
         """
-        while(self.__flag_live_stream and self.__flag_live_localization):
+        while self.__flag_live_stream and self.__flag_live_localization:
             t1 = time.perf_counter()
             region_size = int(np.round(1.6*self.radius_value_lvRec.get(), 0))
             self.coms_aberrated = get_coms_fast(image=self.current_image, nonaberrated_coms=self.coms_spots,
                                                 threshold_abs=self.threshold_value_lvRec.get(),
                                                 region_size=region_size)
-            # Below - plotting found (locali spots
+            # Below - plotting found (localized focal spots)
             rows, cols = self.coms_aberrated.shape
             if rows > 0 and cols > 0:
                 (self.coms_shifts, self.integral_matrix_aberrated,
@@ -1893,7 +1893,7 @@ if __name__ == "__main__":
     # 2) Matplolib parameters are tricky to control and assign because of OOP usage of
     # Axes, Figure and other classes for plotting
     # 3) Check that program returns after call in command line! Sometimes, the close
-    # event not handled properly (instead Stop buttons handle it better then Close window one)
+    # event not handled properly (instead Stop buttons handle it better than Close window one)
     # Save values for Variables Explorer for debugging only
     if reconstructor_gui.coms_shifts is not None and reconstructor_gui.coms_aberrated is not None:
         coms_shifts = reconstructor_gui.coms_shifts
