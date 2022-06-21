@@ -84,7 +84,7 @@ class CameraWrapper(Process):
         """
         # !!! Below - initialization code for the PCO camera, because in the __init__() method it's impossible to make,
         # because the handle returned by the call pco.Camera() is the not pickleable object
-        print("**** Camera Process() print stream WILL BE PRINTED BELOW if the camera changed ****")
+        print(f"**** {self.camera_type} Process() print stream start ****")
         if self.camera_type == "PCO":
             # Since the import of the pco library already has been tested above, again import for availability:
             import pco
@@ -103,15 +103,13 @@ class CameraWrapper(Process):
                 self.max_width = self.camera_reference.sdk.get_sizes()['y max']
                 self.max_height = self.camera_reference.sdk.get_sizes()['x max']
                 self.messages2caller.put_nowait("Camera max width / height: " + str((self.max_width, self.max_height)))  # DEBUG
-                # self.messages2caller.put_nowait("Camera ROI constraints " + str(self.camera_reference.sdk.get_camera_description()))
+                # self.messages2caller.put_nowait("Camera ROI " + str(self.camera_reference.sdk.get_camera_description()))
                 self.initialized = True  # Additional flag for the start the loop in the run method
                 self.images_queue.put_nowait("The PCO camera initialized")
             except ValueError:
                 self.messages2caller.put_nowait("CAMERA NOT INITIALIZED! THE HANDLE TO IT - 'NONE'")  # Only for debugging
                 self.images_queue.put_nowait("The Simulated PCO camera initialized")  # Notify the main GUI about initialization
                 self.camera_reference = None
-        else:
-            print("**** Simulated Camera Print Stream ****")
         self.messages2caller.put_nowait(self.camera_type + " camera Process has been launched")  # Send the command for debugging
         # The main loop - the handler in the Process loop
         n_check_camera_status = 0  # Check and report the status of the PCO camera each dozen of seconds (specification below)
@@ -194,6 +192,7 @@ class CameraWrapper(Process):
                     self.messages2caller.put_nowait("Camera status after 5min: "
                                                     + str(self.camera_reference.sdk.get_camera_health_status()))
         self.messages2caller.put_nowait("run() of Process finished for " + self.camera_type + " camera")  # DEBUG
+        print(f"**** {self.camera_type} Process() print stream finish ****")
 
     def snap_single_image(self):
         """
@@ -247,7 +246,7 @@ class CameraWrapper(Process):
                         except Full:
                             pass  # do nothing for now about the overloaded queue
                         # t2 = time.time(); self.messages2caller.put_nowait("AT: " + str(int(np.round(((t3-t1)*1000), 0))) + " | "
-                        #                                                    + "TT: " + str(int(np.round(((t2-t1)*1000), 0))))  # DEBUG
+                        #                                                    + "TT: " + str(int(np.round(((t2-t1)*1000), 0))))
                 except Exception as error:
                     self.messages2caller.put_nowait("The Live Mode finished by PCO camera because of thrown Exception")
                     self.messages2caller.put_nowait("Thrown error: " + str(error))
@@ -275,7 +274,7 @@ class CameraWrapper(Process):
                         self.messages2caller.put_nowait("Camera stop live streaming because of the reported error")
                         if (self.camera_type == "PCO") and (self.camera_reference is not None):
                             self.camera_reference.stop()  # stop the live stream from the PCO camera
-                        self.messages_queue.put_nowait(message)  # setting for run() method again the error report for stopping the camera
+                        self.messages_queue.put_nowait(message)  # setting for run() again the error report for stopping the camera
                         self.live_stream_flag = False; break
                 except Empty:
                     pass
@@ -420,7 +419,14 @@ class CameraWrapper(Process):
         height = self.image_height; width = self.image_width
         if (height >= 2) and (width >= 2):
             if pixel_type == 'uint8':
-                img = np.random.randint(0, high=255, size=(height, width), dtype='uint8')
+                img = np.zeros(shape=(height, width), dtype='uint16')  # blank image
+                # Generate a few stripes over noisy image
+                pixel_step = 20; j = pixel_step
+                while j < height:
+                    img[:, j] = 255
+                    j += pixel_step
+                img += np.random.randint(0, high=120, size=(height, width), dtype='uint16')
+                maxI = np.max(img); img = (255*(img/maxI)).astype(dtype='uint8')
             if pixel_type == 'float':
                 img = np.random.rand(height, width)
         else:

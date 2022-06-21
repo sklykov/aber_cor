@@ -27,9 +27,11 @@ if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__m
     # Note that in this case this module is aware only about modules / packages in the same folder
     from check_exception_streams import CheckMessagesForExceptions, MessagesPrinter
     from cameras_ctrl import CameraWrapper
+    from fourier_transform_ctrl_win import FourierTransformCtrlWindow
 else:  # relative imports for resolving these dependencies in the case of import as module from a package
     from .check_exception_streams import CheckMessagesForExceptions, MessagesPrinter
     from .cameras_ctrl import CameraWrapper
+    from .fourier_transform_ctrl_win import FourierTransformCtrlWindow
 
 
 # %% Some default values, used for the initialization of GUI
@@ -64,14 +66,16 @@ class SimUscope(QMainWindow):
         self.img_height = img_height; self.img_width = img_width
         self.img_width_default = img_width; self.img_height_default = img_height
         self.img = np.zeros((self.img_height, self.img_width), dtype='uint8')  # Black initial image
-        self.setWindowTitle("Camera control / simulation GUI"); self.setGeometry(200, 200, 840, 800)
+        self.setWindowTitle("Camera control / simulation GUI"); self.setGeometry(50, 100, 880, 820)
+        self.fft_transform_window = None
 
         # PlotItem allows showing the axes and restrict the mouse usage over the image
         self.plot = pyqtgraph.PlotItem()
         self.plot.getViewBox().setMouseEnabled(False, False)  # !!!: Disable the possibility of move image by mouse
         self.imageWidget = pyqtgraph.ImageView(view=self.plot)  # The main widget for image showing (ImageView)
         self.imageWidget.ui.roiBtn.hide(); self.imageWidget.ui.menuBtn.hide()   # Hide ROI, Norm buttons from the ImageView
-        self.imageWidget.setImage(self.img)  # Set image for representation in the ImageView widget
+        if self.img is not None:
+            self.imageWidget.setImage(self.img)  # Set image for representation in the ImageView widget
         self.imageWidget.ui.histogram.sigLevelChangeFinished.connect(self.histogramLevelsChanged)  # connect with command
         self.qwindow = QWidget()  # The composing of all buttons and frame for image representation into one main widget
 
@@ -127,6 +131,8 @@ class SimUscope(QMainWindow):
         self.cropImageButton.setDisabled(True); self.restoreFullImgButton.setDisabled(True)  # until some roi selected
         self.quitButton = QPushButton("Quit"); self.quitButton.setStyleSheet("color: red")
         self.quitButton.clicked.connect(self.quitClicked)
+        self.fft_transform_button = QPushButton("Fourier Spectrum")
+        self.fft_transform_button.clicked.connect(self.calculate_fft_transform)
 
         # Manual image level inputs and update them from the slider control on histogram viewer from the ImageWidget
         self.minLevelButton = QSpinBox(); self.maxLevelButton = QSpinBox()
@@ -158,7 +164,7 @@ class SimUscope(QMainWindow):
         grid.addWidget(self.cropImageButton, 7, 4, 1, 1); grid.addWidget(self.restoreFullImgButton, 7, 5, 1, 1)
         grid.addWidget(self.disableAxesOnImageButton, 1, 6, 1, 1); grid.addWidget(self.disableAutoLevelsButton, 2, 6, 1, 1)
         grid.addLayout(vboxLevels, 3, 6, 1, 1, Qt.AlignCenter)  # adding the min / max pixel values
-        grid.addWidget(self.checkPCOcameraStatus, 7, 6, 1, 1)
+        grid.addWidget(self.checkPCOcameraStatus, 7, 6, 1, 1); grid.addWidget(self.fft_transform_button, 6, 6, 1, 1)
 
         # Set valueChanged event handlers
         self.widthButton.valueChanged.connect(self.image_size_changed)
@@ -169,7 +175,7 @@ class SimUscope(QMainWindow):
         self.setCentralWidget(self.qwindow)  # Actually, allows to make both buttons and ImageView visible
         # Initialize and start the Exception checker and associate it with the initialized Quit button
         self.exception_checker = CheckMessagesForExceptions(self.exceptions_queue, self.quitButton, period_checks_ms=30)
-        self.messages_printer = MessagesPrinter(self.camera_messages, period_checks_ms=40)
+        self.messages_printer = MessagesPrinter(self.camera_messages, period_checks_ms=45)
         self.exception_checker.start(); self.messages_printer.start()  # Start the Exception Checker and Messages Printer
         self.initialize_camera()  # Initializes default camera defined by the default value of cameraSelector button
 
@@ -260,7 +266,7 @@ class SimUscope(QMainWindow):
         self.snapSingleImgButton.setEnabled(True); self.continuousStreamButton.setEnabled(True)
         # Below - associated with the selected camera pecularities
         if self.cameraSelector.currentText() == "PCO":
-            self.widthButton.setDisabled(True); self.heightButton.setDisabled(True)  # PCO camera cannot support arbitrary size changes
+            self.widthButton.setDisabled(True); self.heightButton.setDisabled(True)  # PCO doesn't support arbitrary size changes
             self.generateException.setVisible(False)  # Remove button for testing of handling of generated Exceptions
             # Changing the titles of the buttons for controlling getting the images (from the camera or generated ones)
             self.snapSingleImgButton.setText("Single Snap Image"); self.continuousStreamButton.setText("Live Stream")
@@ -368,7 +374,7 @@ class SimUscope(QMainWindow):
                 except Empty:
                     flagGetNewTime = False  # keep the time measured above for accounting the performance
                     continue  # proceed to the next attempt to retrieve the image from the queue
-                # Attempt to make the GUI more responsive for user input => providing artificial delays for button (simulation mode)
+                # Attempt to make the GUI more responsive for user input => providing artificial delays for button
                 if not self.__flag_real_camera_initialized:
                     # Simulation and recalculate min/max pixel value for each image => bigger delays
                     if (self.exposureTimeButton.value() < 50) and not(self.disableAutoLevelsButton.isChecked()):
@@ -466,7 +472,7 @@ class SimUscope(QMainWindow):
 
         """
         snap_img = self.imageWidget.getImageItem().image  # get the current displayed image
-        composedName = "SnapImage.tiff"; composedPath = os.path.join(os.getcwd(), composedName)  # getting some default image name
+        composedName = "SnapImage.tiff"; composedPath = os.path.join(os.getcwd(), composedName)  # getting some default name
         io.imsave(composedPath, snap_img, plugin='tifffile')  # save tiff file by using embedded tifffile plugin
 
     def putROIonImage(self):
@@ -640,7 +646,8 @@ class SimUscope(QMainWindow):
         """
         if self.disableAutoLevelsButton.isChecked():  # isChecked() = Button pressed (True state)
             self.imageWidget.ui.histogram.hide()  # hide the side histogram with sliders
-            self.imageWidget.getImageItem().setLevels([self.minLevelButton.value(), self.maxLevelButton.value()], update=False)
+            self.imageWidget.getImageItem().setLevels([self.minLevelButton.value(),
+                                                       self.maxLevelButton.value()], update=False)
         else:
             self.imageWidget.ui.histogram.show()  # restore the histogram bar and controls
 
@@ -670,7 +677,8 @@ class SimUscope(QMainWindow):
         if self.disableAutoLevelsButton.isChecked():
             if self.minLevelButton.value() > self.maxLevelButton.value():
                 self.maxLevelButton.setValue(self.minLevelButton.value() + 1)
-            self.imageWidget.getImageItem().setLevels([self.minLevelButton.value(), self.maxLevelButton.value()], update=False)
+            self.imageWidget.getImageItem().setLevels([self.minLevelButton.value(),
+                                                       self.maxLevelButton.value()], update=False)
 
     def checkCameraStatus(self):
         """
@@ -683,6 +691,20 @@ class SimUscope(QMainWindow):
         """
         if self.__flag_real_camera_initialized:
             self.messages2Camera.put_nowait("Get the PCO camera status")
+
+    def calculate_fft_transform(self):
+        """
+        Open new independent window, show associated widgets.
+
+        Returns
+        -------
+        None.
+
+        """
+        # TODO: implementattion
+        if self.fft_transform_window is None:
+            self.fft_transform_window = FourierTransformCtrlWindow(self); self.fft_transform_window.show()
+            self.fft_transform_window.setGeometry(1120, 100, 450, 550)  # ??? hard-coded
 
     def closeEvent(self, closeEvent):
         """
@@ -707,7 +729,7 @@ class SimUscope(QMainWindow):
                     # wait the image updater thread stopped
                     self.imageUpdater.join(timeout=((2*self.exposureTimeButton.value())/1000))
                     print("Image Updater stopped")
-            self.messages2Camera.put_nowait("Stop Program")  # Send the message to stop the imaging and de-initialize the camera:
+            self.messages2Camera.put_nowait("Stop Program")  # Send the message to stop imaging and de-initialize the camera:
             if self.camera_handle is not None:
                 if self.camera_handle.is_alive():  # if the threaded associated with the camera process hasn't been finished
                     self.camera_handle.join(timeout=self.global_timeout)  # wait the camera closing / de-initializing
@@ -721,7 +743,9 @@ class SimUscope(QMainWindow):
             self.camera_messages.put_nowait("Stop Messages Printer")
             self.messages_printer.join()
             print("Messages Printer stopped")
-        closeEvent.accept()  # Maybe redundant, but this is explicit accepting quit event (could be refused if asked for example)
+        if self.fft_transform_window is not None:
+            self.fft_transform_window.close()
+        closeEvent.accept()  # Maybe redundant, but this is explicit accepting quit event
         self.application_handle.exit()  # Exit the main application, returning to the calling it kernel
 
     def quitClicked(self):
@@ -744,7 +768,7 @@ class SimUscope(QMainWindow):
                     # wait the image updater thread stopped
                     self.imageUpdater.join(timeout=((2*self.exposureTimeButton.value())/1000))
                     print("Image Updater stopped")
-            self.messages2Camera.put_nowait("Close the camera")  # Send the message to stop the imaging and deinitialize the camera:
+            self.messages2Camera.put_nowait("Close the camera")  # Send the message to stop imaging and deinitialize the camera:
             if self.camera_handle.is_alive():  # if the threaded associated with the camera process hasn't been finished
                 self.camera_handle.join(timeout=self.global_timeout)  # wait the camera closing / deinitializing
                 self.camera_handle = None  # explicitly setting the handle to None for preventing again checking if it's alive
