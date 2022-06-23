@@ -68,6 +68,8 @@ class SimUscope(QMainWindow):
         self.img = np.zeros((self.img_height, self.img_width), dtype='uint8')  # Black initial image
         self.setWindowTitle("Camera control / simulation GUI"); self.setGeometry(50, 100, 880, 820)
         self.fft_transform_window = None
+        # below - additional flag because double underscore in signature __flag... makes this variable hidden!
+        self.flag_live_stream = False  # dubplicate of the flag about live stream for availiability in a new QWindow
 
         # PlotItem allows showing the axes and restrict the mouse usage over the image
         self.plot = pyqtgraph.PlotItem()
@@ -312,6 +314,7 @@ class SimUscope(QMainWindow):
 
         """
         self.__flag_live_stream = not self.__flag_live_stream  # changing the state of generation
+        self.flag_live_stream = not self.flag_live_stream  # for additional designation for external window
         self.continuousStreamButton.setDown(self.__flag_live_stream)  # changing the visible state of button (clicked or not)
         if self.__flag_live_stream:
             # Activate generation or Live imaging
@@ -704,7 +707,12 @@ class SimUscope(QMainWindow):
         # TODO: implementattion
         if self.fft_transform_window is None:
             self.fft_transform_window = FourierTransformCtrlWindow(self); self.fft_transform_window.show()
-            self.fft_transform_window.setGeometry(1120, 100, 450, 550)  # ??? hard-coded
+            self.fft_transform_window.setGeometry(1120, 100, 600, 700)  # ??? hard-coded
+        else:
+            if not self.__flag_live_stream:
+                self.fft_transform_window.refresh_plot()
+            else:
+                pass  # Initialize live stream calculation
 
     def closeEvent(self, closeEvent):
         """

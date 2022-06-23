@@ -13,6 +13,8 @@ from multiprocessing import Process, Queue
 from queue import Empty, Full
 import time
 import numpy as np
+import skimage.io as io
+import os
 
 
 # %% Class wrapper
@@ -27,6 +29,7 @@ class CameraWrapper(Process):
     max_width: int; max_height: int
     image_width: int; image_height: int
     camera_reference = None
+    replace_img_camera = None
 
     def __init__(self, messages_queue: Queue, exceptions_queue: Queue, images_queue: Queue, messages2caller: Queue,
                  exposure_t_ms: int, image_width: int, image_height: int, camera_type: str = "Simulated"):
@@ -210,7 +213,14 @@ class CameraWrapper(Process):
             # self.messages2caller.put_nowait("Delay exp time infor: " + str(self.camera_reference.sdk.get_delay_exposure_time()))
             self.images_queue.put_nowait(image)  # put the image to the queue for getting it in the main thread
         elif (self.camera_reference is None) and (self.camera_type == "PCO"):
-            self.images_queue.put_nowait("String replacer of an image")
+            # self.images_queue.put_nowait("String replacer of an image")  # exchanged to read and put an image below:
+            # Read the image placed in the same folder for convenience
+            if self.replace_img_camera is None:
+                self.beads_image_path = os.path.join(os.path.curdir, "beads.png")
+                self.replace_img_camera = io.imread(self.beads_image_path)
+            else:
+                self.images_queue.put_nowait(self.replace_img_camera)
+        # Snap simulated picture with white noise
         elif self.camera_type == "Simulated":
             image = self.generate_noise_picture()  # No need to evoke try, because the width and height conformity already checked
             self.images_queue.put_nowait(image)
@@ -420,13 +430,13 @@ class CameraWrapper(Process):
         if (height >= 2) and (width >= 2):
             if pixel_type == 'uint8':
                 img = np.zeros(shape=(height, width), dtype='uint16')  # blank image
-                # Generate a few stripes over noisy image
-                pixel_step = 20; j = pixel_step
-                while j < height:
-                    img[:, j] = 255
-                    j += pixel_step
-                img += np.random.randint(0, high=120, size=(height, width), dtype='uint16')
-                maxI = np.max(img); img = (255*(img/maxI)).astype(dtype='uint8')
+                # Generate a few stripes over noisy image - deprecated now
+                # pixel_step = 20; j = pixel_step
+                # while j < height:
+                #     img[:, j] = 255
+                #     j += pixel_step
+                img += np.random.randint(0, high=255, size=(height, width), dtype='uint16')
+                # maxI = np.max(img); img = (255*(img/maxI)).astype(dtype='uint8')
             if pixel_type == 'float':
                 img = np.random.rand(height, width)
         else:
