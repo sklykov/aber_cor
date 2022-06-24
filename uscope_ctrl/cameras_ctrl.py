@@ -218,6 +218,7 @@ class CameraWrapper(Process):
             if self.replace_img_camera is None:
                 self.beads_image_path = os.path.join(os.path.curdir, "beads.png")
                 self.replace_img_camera = io.imread(self.beads_image_path)
+                self.images_queue.put_nowait(self.replace_img_camera)
             else:
                 self.images_queue.put_nowait(self.replace_img_camera)
         # Snap simulated picture with white noise

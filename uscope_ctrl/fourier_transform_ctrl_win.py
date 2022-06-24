@@ -6,13 +6,14 @@ Rewrite methods of QMainWindow from PyQT5 for further using it for FFT calculati
 @license: GPLv3
 """
 # %% Import section
-from PyQt5.QtWidgets import QMainWindow, QWidget, QGridLayout, QPushButton
-# import pyqtgraph
+from PyQt5.QtWidgets import QMainWindow, QWidget, QGridLayout, QPushButton, QSpinBox
 import numpy as np
 from numpy import fft
 from matplotlib.backends.backend_qtagg import FigureCanvas, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from matplotlib.colors import LogNorm
+from matplotlib.patches import Circle
+from PyQt5.QtCore import Qt
 
 
 # %% Class def
@@ -24,15 +25,15 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.main_class = main_class_instance
         self.setWindowTitle("Fourier Transform and Processing")
 
-        # Construction of the pyqtgraph widget for showing the fft transform graph
-        # self.plot_fft = pyqtgraph.PlotItem()
-        # # self.plot_fft.getViewBox().setMouseEnabled(False, False)
-        # self.fft_plot_widget = pyqtgraph.ImageView(view=self.plot_fft)  # The main widget for image showing
-        # self.fft_plot_widget.ui.roiBtn.hide(); self.fft_plot_widget.ui.menuBtn.hide()   # Hide ROI, Norm buttons
-        # self.fft_plot_widget.ui.histogram.hide()  # hide histogram graph
-        # self.fft_plot_widget.getView().showAxis("left", show=False)
-        # self.fft_plot_widget.getView().showAxis("bottom", show=False)
+        # Buttons specification
         self.ctrl_button = QPushButton("ctrl button")
+        self.r_min = QSpinBox(); self.r_min.setSingleStep(1); self.r_min.setMaximum(98)
+        self.r_max = QSpinBox(); self.r_max.setSingleStep(1); self.r_max.setMaximum(100)
+        self.r_min.setMinimum(1); self.r_max.setMinimum(2); self.r_min.setValue(1); self.r_max.setValue(11)
+        self.r_min.setAlignment(Qt.AlignCenter); self.r_max.setAlignment(Qt.AlignCenter)
+        self.r_min.setPrefix("R min %: "); self.r_max.setPrefix("R max %: ")
+        self.r_min.valueChanged.connect(self.draw_metric_calculation_ranges)
+        self.r_max.valueChanged.connect(self.draw_metric_calculation_ranges)
 
         # Embedding the matplolib graph into the qt window
         # self.default_plot_figure = 6.0  # default figure size (in inches)
@@ -44,6 +45,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         # self.plot_figure_axes.axis('off')
         self.plot_figure.tight_layout()
         self.plot_figure.subplots_adjust(left=0.07, bottom=0.03, right=0.99, top=1)
+        self.imshowing = None; self.fft_transformed_image = None
 
         # Grid layout
         self.qwindow_fft = QWidget()  # The composing of all widgets for image representation into one main widget
@@ -51,7 +53,8 @@ class FourierTransformCtrlWindow(QMainWindow):
         grid = QGridLayout(self.qwindow_fft)  # grid layout allows better layout of buttons and frames
         # grid.addWidget(self.fft_plot_widget, 0, 0, 4, 4)  # add image representation widget
         grid.addWidget(self.canvas_widget, 0, 0, 4, 4); grid.addWidget(self.navigation_toolbar, 4, 0, 1, 4)
-        grid.addWidget(self.ctrl_button, 5, 0, 1, 1)
+        grid.addWidget(self.ctrl_button, 5, 0, 1, 1); grid.addWidget(self.r_min, 5, 1, 1, 1)
+        grid.addWidget(self.r_max, 5, 2, 1, 1)
 
         self.plot_fourier_trasnform()  # call the plotting function
 
@@ -78,15 +81,19 @@ class FourierTransformCtrlWindow(QMainWindow):
                 self.fft_transformed_image = fft.fftshift(self.fft_transformed_image)
                 # Normalization of the Fourier transformed image (???):
                 self.fft_transformed_image /= 2*np.pi*maxI
-                # self.fft_transformed_image = ((self.fft_transformed_image/np.max(self.fft_transformed_image))*255)
-                # self.fft_plot_widget.setImage(self.fft_transformed_image)
                 # Below - LogNorm colors for representation of logariphmically scaled amplitudes
                 minFFTvalue = np.min(self.fft_transformed_image); maxFFTvalue = np.max(self.fft_transformed_image)
                 if maxFFTvalue <= minFFTvalue:
                     maxFFTvalue = 1; minFFTvalue = 0
-                self.imshowing = self.plot_figure_axes.imshow(self.fft_transformed_image,
-                                                              norm=LogNorm(vmin=minFFTvalue, vmax=maxFFTvalue))
+                if self.imshowing is None:
+                    self.imshowing = self.plot_figure_axes.imshow(self.fft_transformed_image,
+                                                                  norm=LogNorm(vmin=minFFTvalue, vmax=maxFFTvalue))
+                else:
+                    self.imshowing.set_data(self.fft_transformed_image)
                 self.canvas_widget.draw_idle()
+                # Draw the region selection of accounted values for metrics:
+                self.draw_metric_calculation_ranges()
+
             # self.plot_figure.colorbar(self.imshowing)
 
     def refresh_plot(self):
@@ -98,7 +105,31 @@ class FourierTransformCtrlWindow(QMainWindow):
         None.
 
         """
-        self.plot_fourier_trasnform()
+        self.plot_fourier_trasnform()  # call the function for plotting
+
+    def draw_metric_calculation_ranges(self):
+        """
+        Draw circles on the Fourier transformed image for accounting of a image metric.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.fft_transformed_image is not None:
+            # Draw the region selection of accounted values for metrics:
+            m, n = self.fft_transformed_image.shape
+            r1_procent = self.r_min.value()/100; r2_procent = self.r_max.value()/100
+            r1 = int(np.round(r1_procent*m, 0))  # 1% of the fft transformed image
+            r2 = int(np.round(r2_procent*m, 0))  # 11% of the fft transformed image
+            if self.plot_figure_axes is not None:
+                # Cleaning previous circles
+                if len(self.plot_figure_axes.patches) >= 1:
+                    self.plot_figure_axes.patches[0].remove()
+                    self.plot_figure_axes.patches[0].remove()
+                self.plot_figure_axes.add_patch(Circle((m//2, n//2), r1, edgecolor='red', facecolor='none'))
+                self.plot_figure_axes.add_patch(Circle((m//2, n//2), r2, edgecolor='red', facecolor='none'))
+                self.canvas_widget.draw_idle()
 
     def closeEvent(self, closing_event):
         """
