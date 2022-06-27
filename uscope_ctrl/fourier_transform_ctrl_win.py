@@ -24,6 +24,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         super().__init__()
         self.main_class = main_class_instance
         self.setWindowTitle("Fourier Transform and Processing")
+        self.image_quality_metric = 0.0
 
         # Buttons specification
         self.ctrl_button = QPushButton("ctrl button")
@@ -42,9 +43,10 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.canvas_widget = FigureCanvas(self.plot_figure); self.canvas_widget.draw()
         self.plot_figure_axes = self.plot_figure.add_subplot()
         self.navigation_toolbar = NavigationToolbar(self.canvas_widget, self)
+        self.plot_figure_axes.autoscale(enable=True, axis='both', tight=True)
         # self.plot_figure_axes.axis('off')
         self.plot_figure.tight_layout()
-        self.plot_figure.subplots_adjust(left=0.07, bottom=0.03, right=0.99, top=1)
+        self.plot_figure.subplots_adjust(left=0.075, bottom=0.02, right=0.975, top=1)
         self.imshowing = None; self.fft_transformed_image = None
 
         # Grid layout
@@ -90,11 +92,14 @@ class FourierTransformCtrlWindow(QMainWindow):
                                                                   norm=LogNorm(vmin=minFFTvalue, vmax=maxFFTvalue))
                 else:
                     self.imshowing.set_data(self.fft_transformed_image)
+                    m, n = self.fft_transformed_image.shape
+                    self.imshowing.set_extent((0, m, n, 0))  # update the range (now - always, need only if image size changed)
+                # self.plot_figure.colorbar(self.imshowing)
                 self.canvas_widget.draw_idle()
                 # Draw the region selection of accounted values for metrics:
                 self.draw_metric_calculation_ranges()
-
-            # self.plot_figure.colorbar(self.imshowing)
+                # Re-calculate the image quality metric
+                self.calculate_image_quality_metric()
 
     def refresh_plot(self):
         """
@@ -116,20 +121,58 @@ class FourierTransformCtrlWindow(QMainWindow):
         None.
 
         """
+        # Check consistency of input values
+        if self.r_min.value() >= self.r_max.value():
+            self.r_max.setValue(self.r_min.value() + 1)
+        # Draw the selected ranges on Fourier-spectrum
         if self.fft_transformed_image is not None:
             # Draw the region selection of accounted values for metrics:
             m, n = self.fft_transformed_image.shape
             r1_procent = self.r_min.value()/100; r2_procent = self.r_max.value()/100
-            r1 = int(np.round(r1_procent*m, 0))  # 1% of the fft transformed image
-            r2 = int(np.round(r2_procent*m, 0))  # 11% of the fft transformed image
+            # ??? In general, image should be with the same width and height
+            if m >= n:
+                dim = m
+            else:
+                dim = n
+            self.r1 = int(np.round(r1_procent*dim, 0))  # 1% of the fft transformed image
+            self.r2 = int(np.round(r2_procent*dim, 0))  # 11% of the fft transformed image
             if self.plot_figure_axes is not None:
                 # Cleaning previous circles
                 if len(self.plot_figure_axes.patches) >= 1:
                     self.plot_figure_axes.patches[0].remove()
                     self.plot_figure_axes.patches[0].remove()
-                self.plot_figure_axes.add_patch(Circle((m//2, n//2), r1, edgecolor='red', facecolor='none'))
-                self.plot_figure_axes.add_patch(Circle((m//2, n//2), r2, edgecolor='red', facecolor='none'))
+                self.plot_figure_axes.add_patch(Circle((m//2, n//2), self.r1, edgecolor='red', facecolor='none'))
+                self.plot_figure_axes.add_patch(Circle((m//2, n//2), self.r2, edgecolor='red', facecolor='none'))
                 self.canvas_widget.draw_idle()
+
+    def calculate_image_quality_metric(self):
+        """
+        Calculate the image quality metric (sum of spectrum values between two circles).
+
+        Returns
+        -------
+        None.
+
+        """
+        self.image_quality_metric = 0.0
+        if (self.fft_transformed_image is not None and isinstance(self.fft_transformed_image, np.ndarray)):
+            m, n = self.fft_transformed_image.shape
+            r1_procent = self.r_min.value()/100; r2_procent = self.r_max.value()/100
+            if m >= n:
+                dim = m
+            else:
+                dim = n
+            r1 = r1_procent*dim; r2 = r2_procent*dim
+            # For speeeding up the calculations, below - calculation starting coordinates
+            i_min = m//2 - int(np.round(r2, 0)); j_min = n//2 - int(np.round(r2, 0))
+            i_max = m//2 + int(np.round(r2, 0)); j_max = n//2 + int(np.round(r2, 0))
+            for i in range(i_min, i_max):
+                for j in range(j_min, j_max):
+                    distance = np.sqrt(np.power(i-m//2, 2) + np.power(j-n//2, 2))
+                    if r1 <= distance <= r2:
+                        self.image_quality_metric += self.fft_transformed_image[i, j]
+            self.image_quality_metric = np.round(self.image_quality_metric, 0)
+            print("Calculated metric:", self.image_quality_metric)
 
     def closeEvent(self, closing_event):
         """
