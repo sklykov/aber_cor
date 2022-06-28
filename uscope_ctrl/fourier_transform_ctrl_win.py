@@ -6,7 +6,7 @@ Rewrite methods of QMainWindow from PyQT5 for further using it for FFT calculati
 @license: GPLv3
 """
 # %% Import section
-from PyQt5.QtWidgets import QMainWindow, QWidget, QGridLayout, QPushButton, QSpinBox
+from PyQt5.QtWidgets import QMainWindow, QWidget, QGridLayout, QPushButton, QSpinBox, QDoubleSpinBox
 import numpy as np
 from numpy import fft
 from matplotlib.backends.backend_qtagg import FigureCanvas, NavigationToolbar2QT as NavigationToolbar
@@ -25,9 +25,11 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.main_class = main_class_instance
         self.setWindowTitle("Fourier Transform and Processing")
         self.image_quality_metric = 0.0
+        self.ctrl_script_handle  = None
 
         # Buttons specification
-        self.ctrl_button = QPushButton("ctrl button")
+        self.recalculate_button = QPushButton("Recalculate metric")
+        self.recalculate_button.clicked.connect(self.calculate_image_quality_metric)
         self.r_min = QSpinBox(); self.r_min.setSingleStep(1); self.r_min.setMaximum(98)
         self.r_max = QSpinBox(); self.r_max.setSingleStep(1); self.r_max.setMaximum(100)
         self.r_min.setMinimum(1); self.r_max.setMinimum(2); self.r_min.setValue(1); self.r_max.setValue(11)
@@ -35,6 +37,18 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.r_min.setPrefix("R min %: "); self.r_max.setPrefix("R max %: ")
         self.r_min.valueChanged.connect(self.draw_metric_calculation_ranges)
         self.r_max.valueChanged.connect(self.draw_metric_calculation_ranges)
+        self.open_ctrl_button = QPushButton("Open DPP ctrl")
+        self.open_ctrl_button.clicked.connect(self.open_ctrl_program)
+        self.bias_min = QDoubleSpinBox(); self.bias_min.setSingleStep(0.1); self.bias_min.setMaximum(3.0)
+        self.bias_max = QDoubleSpinBox(); self.bias_max.setSingleStep(0.1); self.bias_max.setMaximum(4.0)
+        self.bias_min.setMinimum(-4.0); self.bias_max.setMinimum(-3.0)
+        self.bias_min.setValue(-1.0); self.bias_max.setValue(1.0)
+        self.bias_min.setAlignment(Qt.AlignCenter); self.bias_max.setAlignment(Qt.AlignCenter)
+        self.bias_min.setPrefix("Bias min: "); self.bias_max.setPrefix("Bias max: ")
+        self.bias_min.setDecimals(1); self.bias_max.setDecimals(1)
+        self.bias_min.valueChanged.connect(self.min_bias_value_changed)
+        self.bias_max.valueChanged.connect(self.max_bias_value_changed)
+        self.bias_min.setEnabled(False); self.bias_max.setEnabled(False)  # disable ctrls until the device opened
 
         # Embedding the matplolib graph into the qt window
         # self.default_plot_figure = 6.0  # default figure size (in inches)
@@ -46,7 +60,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.plot_figure_axes.autoscale(enable=True, axis='both', tight=True)
         # self.plot_figure_axes.axis('off')
         self.plot_figure.tight_layout()
-        self.plot_figure.subplots_adjust(left=0.075, bottom=0.02, right=0.975, top=1)
+        self.plot_figure.subplots_adjust(left=0.08, bottom=0.02, right=0.97, top=1)
         self.imshowing = None; self.fft_transformed_image = None
 
         # Grid layout
@@ -55,8 +69,9 @@ class FourierTransformCtrlWindow(QMainWindow):
         grid = QGridLayout(self.qwindow_fft)  # grid layout allows better layout of buttons and frames
         # grid.addWidget(self.fft_plot_widget, 0, 0, 4, 4)  # add image representation widget
         grid.addWidget(self.canvas_widget, 0, 0, 4, 4); grid.addWidget(self.navigation_toolbar, 4, 0, 1, 4)
-        grid.addWidget(self.ctrl_button, 5, 0, 1, 1); grid.addWidget(self.r_min, 5, 1, 1, 1)
-        grid.addWidget(self.r_max, 5, 2, 1, 1)
+        grid.addWidget(self.recalculate_button, 5, 0, 1, 1); grid.addWidget(self.r_min, 5, 1, 1, 1)
+        grid.addWidget(self.r_max, 5, 2, 1, 1); grid.addWidget(self.open_ctrl_button, 6, 0, 1, 1)
+        grid.addWidget(self.bias_min, 6, 1, 1, 1); grid.addWidget(self.bias_max, 6, 2, 1, 1)
 
         self.plot_fourier_trasnform()  # call the plotting function
 
@@ -174,6 +189,51 @@ class FourierTransformCtrlWindow(QMainWindow):
             self.image_quality_metric = np.round(self.image_quality_metric, 0)
             print("Calculated metric:", self.image_quality_metric)
 
+    def min_bias_value_changed(self):
+        """
+        Check consistency of min and max biases controls, if min bias value changed.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.bias_min.value() >= self.bias_max.value():
+            self.bias_max.setValue(self.bias_min.value() + 0.2)
+
+    def max_bias_value_changed(self):
+        """
+        Check consistency of min and max biases controls, if max bias value changed.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.bias_max.value() <= self.bias_min.value():
+            self.bias_min.setValue(self.bias_min.value() - 0.2)
+
+    def open_ctrl_program(self):
+        """
+        Open the controlling of DPP program.
+
+        Returns
+        -------
+        None.
+
+        """
+        try:
+            from dpp_ctrl import gui_dpp_ctrl
+            self.gui_dpp_ctrl = gui_dpp_ctrl  # make the imported module as the attribute of the class
+            try:
+                # Try to use the specific function in the module
+                self.ctrl_script_handle = self.gui_dpp_ctrl.external_launch()
+            except AttributeError:
+                # Use the general launcher of the controlling program
+                self.gui_dpp_ctrl.launch()
+        except ModuleNotFoundError:
+            print("Check that the DPP controlling program is installed in the active environment")
+
     def closeEvent(self, closing_event):
         """
         Rewrite standard handling of a click on the Close button.
@@ -188,5 +248,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         None.
 
         """
+        if self.ctrl_script_handle is not None:
+            self.ctrl_script_handle.destroy()
         self.main_class.fft_transform_window = None
         self.close()

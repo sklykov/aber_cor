@@ -707,7 +707,7 @@ class SimUscope(QMainWindow):
         # TODO: implementattion
         if self.fft_transform_window is None:
             self.fft_transform_window = FourierTransformCtrlWindow(self); self.fft_transform_window.show()
-            self.fft_transform_window.setGeometry(1120, 100, 600, 700)  # ??? hard-coded
+            self.fft_transform_window.setGeometry(1080, 100, 600, 700)  # ??? hard-coded
         else:
             if not self.__flag_live_stream:
                 self.fft_transform_window.refresh_plot()
