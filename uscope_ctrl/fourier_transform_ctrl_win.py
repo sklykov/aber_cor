@@ -25,7 +25,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.main_class = main_class_instance
         self.setWindowTitle("Fourier Transform and Processing")
         self.image_quality_metric = 0.0
-        self.ctrl_script_handle  = None
+        self.ctrl_script_handle = None
 
         # Buttons specification
         self.recalculate_button = QPushButton("Recalculate metric")
@@ -227,7 +227,7 @@ class FourierTransformCtrlWindow(QMainWindow):
             self.gui_dpp_ctrl = gui_dpp_ctrl  # make the imported module as the attribute of the class
             try:
                 # Try to use the specific function in the module
-                self.ctrl_script_handle = self.gui_dpp_ctrl.external_launch()
+                self.ctrl_script_handle = self.gui_dpp_ctrl.external_default_launch()  # ??? Run on independent thread?
             except AttributeError:
                 # Use the general launcher of the controlling program
                 self.gui_dpp_ctrl.launch()

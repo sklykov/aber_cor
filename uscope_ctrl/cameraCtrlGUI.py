@@ -85,7 +85,7 @@ class SimUscope(QMainWindow):
         self.cameraSelector = QComboBox(); self.cameraSelector.addItems(["Simulated", "PCO"])
         self.cameraSelector.setCurrentText("PCO")  # Default camera for initialization - the simulated one
         self.cameraSelector.currentTextChanged.connect(self.activeCameraChanged)  # Attach handlers for camera choosing
-        self.cameraSelLabel = QLabel("Camera Type"); self.cameraSelector.setEditable(True)  # setEditable is needed for setAlignment
+        self.cameraSelLabel = QLabel("Camera Type"); self.cameraSelector.setEditable(True)  # setEditable is for setAlignment
         self.cameraSelector.lineEdit().setAlignment(Qt.AlignCenter); self.cameraSelector.lineEdit().setReadOnly(True)
         vboxSelector = QVBoxLayout(); vboxSelector.addWidget(self.cameraSelLabel); vboxSelector.addWidget(self.cameraSelector)
         self.cameraSelLabel.setAlignment(Qt.AlignCenter)  # Align the label text on the center
