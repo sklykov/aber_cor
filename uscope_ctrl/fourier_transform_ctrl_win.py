@@ -14,6 +14,8 @@ from matplotlib.figure import Figure
 from matplotlib.colors import LogNorm
 from matplotlib.patches import Circle
 from PyQt5.QtCore import Qt
+from multiprocessing import Queue as mpQueue
+import time
 
 
 # %% Class def
@@ -224,13 +226,15 @@ class FourierTransformCtrlWindow(QMainWindow):
         """
         try:
             from dpp_ctrl import gui_dpp_ctrl
-            self.gui_dpp_ctrl = gui_dpp_ctrl  # make the imported module as the attribute of the class
             try:
-                # Try to use the specific function in the module
-                self.ctrl_script_handle = self.gui_dpp_ctrl.external_default_launch()  # ??? Run on independent thread?
+                aberrations_queue = mpQueue(maxsize=5)
+                self.ctrl_dpp_prc = gui_dpp_ctrl.IndPrcLauncher(aberrations_queue)
+                self.ctrl_dpp_prc.start()
+                time.sleep(5); aberrations = {"0, 2": 0.5, "1,1": -0.5}
+                aberrations_queue.put_nowait(aberrations)
             except AttributeError:
                 # Use the general launcher of the controlling program
-                self.gui_dpp_ctrl.launch()
+                gui_dpp_ctrl.external_default_launch()
         except ModuleNotFoundError:
             print("Check that the DPP controlling program is installed in the active environment")
 

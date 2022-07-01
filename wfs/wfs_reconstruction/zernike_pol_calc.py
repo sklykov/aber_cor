@@ -554,6 +554,34 @@ def get_osa_standard_index(m: int, n: int) -> int:
     return (m + n*(n+2))//2
 
 
+def get_orders_osa_index_correspondence(max_order: int = 7) -> list:
+    """
+    Provide the list with OSA/ANSI standard single indexing for each for Zernike polynomial with tuple(m, n).
+
+    Parameters
+    ----------
+    max_order : int, optional
+        Maximum order of generated correpondance list. The default is 7.
+
+    Returns
+    -------
+    list
+        List of correspondance between azimuthal and radial orders as tuple (m, n) and OSA index used in the list.
+
+    """
+    n_list_items = 0
+    for i in range(max_order+1):
+        n_list_items += (1 + i)
+    correspondence_list = ['']*n_list_items
+    for n in range(max_order+1):
+        m = -n
+        while m <= n:
+            if (m + n) % 2 == 0:
+                correspondence_list[get_osa_standard_index(m, n)] = (m, n)
+            m += 1
+    return correspondence_list
+
+
 def test():
     """
     Perform tests of implemented recurrence equations.
