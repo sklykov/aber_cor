@@ -795,6 +795,6 @@ class SimUscope(QMainWindow):
 # %% GUI Launch
 if __name__ == "__main__":
     my_app = QApplication([])  # application without any command-line arguments
-    # my_app.setQuitOnLastWindowClosed(True)  # workaround for forcing the quit of the application window for returning to the kernel
+    # my_app.setQuitOnLastWindowClosed(True)  # forcing the quit of the application window for returning to the kernel
     main_window = SimUscope(width_default, height_default, my_app); main_window.show()
     my_app.exec()  # Execute the application in the main kernel

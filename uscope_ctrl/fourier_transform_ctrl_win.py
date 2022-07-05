@@ -28,6 +28,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.setWindowTitle("Fourier Transform and Processing")
         self.image_quality_metric = 0.0
         self.ctrl_script_handle = None
+        self.aberrations_selector_window = None
 
         # Buttons specification
         self.recalculate_button = QPushButton("Recalculate metric")
@@ -51,6 +52,8 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.bias_min.valueChanged.connect(self.min_bias_value_changed)
         self.bias_max.valueChanged.connect(self.max_bias_value_changed)
         self.bias_min.setEnabled(False); self.bias_max.setEnabled(False)  # disable ctrls until the device opened
+        self.applied_aberrations_ctrl_button = QPushButton("Select aberrations")
+        self.applied_aberrations_ctrl_button.clicked.connect(self.open_aberrations_selector)
 
         # Embedding the matplolib graph into the qt window
         # self.default_plot_figure = 6.0  # default figure size (in inches)
@@ -74,6 +77,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         grid.addWidget(self.recalculate_button, 5, 0, 1, 1); grid.addWidget(self.r_min, 5, 1, 1, 1)
         grid.addWidget(self.r_max, 5, 2, 1, 1); grid.addWidget(self.open_ctrl_button, 6, 0, 1, 1)
         grid.addWidget(self.bias_min, 6, 1, 1, 1); grid.addWidget(self.bias_max, 6, 2, 1, 1)
+        grid.addWidget(self.applied_aberrations_ctrl_button, 6, 3, 1, 1)
 
         self.plot_fourier_trasnform()  # call the plotting function
 
@@ -234,9 +238,28 @@ class FourierTransformCtrlWindow(QMainWindow):
                 aberrations_queue.put_nowait(aberrations)
             except AttributeError:
                 # Use the general launcher of the controlling program
+                print("External aberrations specifying not launched")
                 gui_dpp_ctrl.external_default_launch()
+            self.bias_min.setEnabled(True); self.bias_max.setEnabled(True)  # enable bias ctrls
         except ModuleNotFoundError:
             print("Check that the DPP controlling program is installed in the active environment")
+
+    def open_aberrations_selector(self):
+        """
+        Create / show the QMainWindow with the selectors of aberrations to correct.
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.aberrations_selector_window is None:
+            self.aberrations_selector_window = QMainWindow(parent=self)
+            self.aberrations_selector_window.show()
+            self.aberrations_selector_window.setWindowTitle("Select correcting aberrations")
+            self.aberrations_selector_window.setGeometry(300, 300, 380, 300)
+        elif not self.aberrations_selector_window.isVisible():
+            self.aberrations_selector_window.show()
 
     def closeEvent(self, closing_event):
         """
