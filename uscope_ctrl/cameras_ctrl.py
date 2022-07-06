@@ -8,7 +8,7 @@ For dependency list - see the imports (the simplest form).
 @author: Sergei Klykov (GitHub: @ssklykov)
 @license: GPLv3 (check https://www.gnu.org/licenses/ )
 """
-# %% Imports - global dependecies (from standard library and installed by conda / pip)
+# %% Imports - global dependencies (from standard library and installed by conda / pip)
 from multiprocessing import Process, Queue
 from queue import Empty, Full
 import time

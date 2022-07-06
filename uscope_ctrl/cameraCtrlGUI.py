@@ -5,7 +5,7 @@ GUI for controlling PCO camera or generating noisy image using PyQT.
 @author: Sergei Klykov (GitHub: @ssklykov)
 @license: GPLv3
 """
-# %% Imports - global dependecies (from standard library and installed by conda / pip)
+# %% Imports - global dependencies (from standard library and installed by conda / pip)
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QGridLayout,
                              QSpinBox, QCheckBox, QVBoxLayout, QComboBox, QLabel)
 from PyQt5.QtCore import Qt, QRect
@@ -19,11 +19,11 @@ from skimage import io
 from threading import Thread
 from pathlib import Path
 
-# %% Imports - local dependecies (modules / packages in the containing it folder / subfolders)
+# %% Imports - local dependencies (modules / packages in the containing it folder / sub-folders)
 print("Calling signature:", __name__)  # inspection of called signature
 # TODO: check why calling signature changed then the camera type has been changed
 if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__mp_main__":
-    # Actual call as the standalone module or from other module from this package (as a dependecy)
+    # Actual call as the standalone module or from other module from this package (as a dependency)
     # Note that in this case this module is aware only about modules / packages in the same folder
     from check_exception_streams import CheckMessagesForExceptions, MessagesPrinter
     from cameras_ctrl import CameraWrapper
@@ -32,10 +32,6 @@ else:  # relative imports for resolving these dependencies in the case of import
     from .check_exception_streams import CheckMessagesForExceptions, MessagesPrinter
     from .cameras_ctrl import CameraWrapper
     from .fourier_transform_ctrl_win import FourierTransformCtrlWindow
-
-
-# %% Some default values, used for the initialization of GUI
-width_default = 2000; height_default = 2000  # Default width and height for generation of images
 
 
 # %% Main GUI
@@ -48,10 +44,22 @@ class SimUscope(QMainWindow):
     flag_auto_range = True  # flag for handling user preference about possibility to zoom in/out to images
     __flag_real_camera_initialized = False  # For further usage it for making GUI more responsive and stable
     global_timeout = 1  # in seconds, to wait for all join() commands with processes
+    img_height = 2000; img_width = 2000  # default values for noisy (simulation) image generation
 
-    # noinspection PyUnresolvedReferences
-    def __init__(self, img_height, img_width, application_handle: QApplication):
-        """Create overall UI inside the QMainWindow widget."""
+    def __init__(self, application_handle: QApplication):
+        """
+        Create overall UI inside the QMainWindow widget.
+
+        Parameters
+        ----------
+        application_handle : QApplication class.
+            Container for the pyqt gui event loop.
+
+        Returns
+        -------
+        Instance of the SimUscope class.
+
+        """
         super().__init__()
         # Holders for initialized later variables
         self.imageUpdater = None; self.roi = None; self.camera_handle = None
@@ -63,13 +71,12 @@ class SimUscope(QMainWindow):
         self.images_queue = Queue(maxsize=40)  # Initialize the queue for holding acquired images and accessing them from the GUI
         self.gui_refresh_rate_ms = 10  # The constant time pause between each attempt to retrieve the image
         self.wait_multiplicator = 2  # The amount for calculation of timeout for retrieving image from the images_queue
-        self.img_height = img_height; self.img_width = img_width
-        self.img_width_default = img_width; self.img_height_default = img_height
+        self.img_width_default = self.img_width; self.img_height_default = self.img_height
         self.img = np.zeros((self.img_height, self.img_width), dtype='uint8')  # Black initial image
         self.setWindowTitle("Camera control / simulation GUI"); self.setGeometry(50, 100, 880, 820)
         self.fft_transform_window = None
         # below - additional flag because double underscore in signature __flag... makes this variable hidden!
-        self.flag_live_stream = False  # dubplicate of the flag about live stream for availiability in a new QWindow
+        self.flag_live_stream = False  # duplicate of the flag about live stream for availability in a new QWindow
 
         # PlotItem allows showing the axes and restrict the mouse usage over the image
         self.plot = pyqtgraph.PlotItem()
@@ -82,12 +89,12 @@ class SimUscope(QMainWindow):
         self.qwindow = QWidget()  # The composing of all buttons and frame for image representation into one main widget
 
         # Buttons specification
-        self.cameraSelector = QComboBox(); self.cameraSelector.addItems(["Simulated", "PCO"])
-        self.cameraSelector.setCurrentText("PCO")  # Default camera for initialization - the simulated one
-        self.cameraSelector.currentTextChanged.connect(self.activeCameraChanged)  # Attach handlers for camera choosing
-        self.cameraSelLabel = QLabel("Camera Type"); self.cameraSelector.setEditable(True)  # setEditable is for setAlignment
-        self.cameraSelector.lineEdit().setAlignment(Qt.AlignCenter); self.cameraSelector.lineEdit().setReadOnly(True)
-        vboxSelector = QVBoxLayout(); vboxSelector.addWidget(self.cameraSelLabel); vboxSelector.addWidget(self.cameraSelector)
+        self.camera_selector = QComboBox(); self.camera_selector.addItems(["Simulated", "PCO"])
+        self.camera_selector.setCurrentText("PCO")  # default camera - the physical PCO one
+        self.camera_selector.currentTextChanged.connect(self.active_camera_changed)  # Attach handlers for camera choosing
+        self.cameraSelLabel = QLabel("Camera Type"); self.camera_selector.setEditable(True)  # setEditable is for setAlignment
+        self.camera_selector.lineEdit().setAlignment(Qt.AlignCenter); self.camera_selector.lineEdit().setReadOnly(True)
+        vboxSelector = QVBoxLayout(); vboxSelector.addWidget(self.cameraSelLabel); vboxSelector.addWidget(self.camera_selector)
         self.cameraSelLabel.setAlignment(Qt.AlignCenter)  # Align the label text on the center
 
         # ROI size selectors
@@ -120,8 +127,8 @@ class SimUscope(QMainWindow):
         self.exposureTimeButton.setKeyboardTracking(False)  # !!! disable emitting of signals for each typed value
         # E.g., when the user is typing "100" => emit 3 signals for 3 numbers, if keyboardTracking(True)
         self.exposureTimeButton.valueChanged.connect(self.exposureTimeChanged)
-        self.switchMouseCtrlImage = QCheckBox("Handling Image by mouse"); self.switchMouseCtrlImage.setChecked(False)
-        self.switchMouseCtrlImage.stateChanged.connect(self.activateMouseOnImage)
+        self.switch_mouse_ctrl_image = QCheckBox("Handling Image by mouse"); self.switch_mouse_ctrl_image.setChecked(False)
+        self.switch_mouse_ctrl_image.stateChanged.connect(self.change_mouse_ctrl_on_image)
         self.saveSnapImg = QPushButton("Save Single Image"); self.saveSnapImg.clicked.connect(self.saveSingleSnapImg)
         self.saveSnapImg.setDisabled(True)  # disable the saving image before any image generated / displayed
         self.putROI = QPushButton("ROI selector"); self.putROI.clicked.connect(self.putROIonImage)
@@ -160,7 +167,7 @@ class SimUscope(QMainWindow):
         grid.addLayout(vbox, 0, 5, 1, 1); self.widthButton.setSingleStep(2); self.heightButton.setSingleStep(2)
         self.widthButton.setMinimum(50); self.heightButton.setMinimum(50); self.widthButton.setMaximum(3000)
         self.heightButton.setMaximum(3000); self.widthButton.setValue(self.img_width); self.heightButton.setValue(self.img_height)
-        grid.addWidget(self.quitButton, 0, 6, 1, 1); grid.addWidget(self.switchMouseCtrlImage, 7, 0, 1, 1)
+        grid.addWidget(self.quitButton, 0, 6, 1, 1); grid.addWidget(self.switch_mouse_ctrl_image, 7, 0, 1, 1)
         grid.addWidget(self.saveSnapImg, 7, 1, 1, 1); grid.addWidget(self.putROI, 7, 2, 1, 1)
         grid.addLayout(vboxROI, 7, 3, 1, 1); grid.addWidget(self.generateException, 7, 6, 1, 1)
         grid.addWidget(self.cropImageButton, 7, 4, 1, 1); grid.addWidget(self.restoreFullImgButton, 7, 5, 1, 1)
@@ -179,7 +186,7 @@ class SimUscope(QMainWindow):
         self.exception_checker = CheckMessagesForExceptions(self.exceptions_queue, self.quitButton, period_checks_ms=30)
         self.messages_printer = MessagesPrinter(self.camera_messages, period_checks_ms=45)
         self.exception_checker.start(); self.messages_printer.start()  # Start the Exception Checker and Messages Printer
-        self.initialize_camera()  # Initializes default camera defined by the default value of cameraSelector button
+        self.initialize_camera()  # Initializes default camera defined by the default value of camera_selector button
 
     def initialize_camera(self):
         """
@@ -193,10 +200,10 @@ class SimUscope(QMainWindow):
         # Initialize the Camera class
         self.camera_handle = CameraWrapper(self.messages2Camera, self.exceptions_queue, self.images_queue, self.camera_messages,
                                            self.exposureTimeButton.value(), self.img_width_default, self.img_height_default,
-                                           camera_type=self.cameraSelector.currentText())
+                                           camera_type=self.camera_selector.currentText())
         self.camera_handle.start()  # start the main loop of the controlling class
         # PCO camera demands long time for initialization, if below - for waiting it to finish everything
-        if self.cameraSelector.currentText() == "PCO":
+        if self.camera_selector.currentText() == "PCO":
             # Below - the flag to delay this code to wait of confirmation that camera initialized
             received_initialization_confirmation = False
             message = "-"  # empty message
@@ -214,20 +221,20 @@ class SimUscope(QMainWindow):
             print("Confirmation received:", message)
             self.checkPCOcameraStatus.setVisible(True)
         # Below - associated with the selected camera peculiarities
-        if self.cameraSelector.currentText() == "PCO":
+        if self.camera_selector.currentText() == "PCO":
             # PCO camera cannot support arbitrary size changes
             self.widthButton.setDisabled(True); self.heightButton.setDisabled(True)
             self.generateException.setVisible(False)  # Remove button for testing of handling of generated Exceptions
             # Changing the titles of the buttons for controlling getting the images (from the camera or generated ones)
             self.snapSingleImgButton.setText("Single Snap Image"); self.continuousStreamButton.setText("Live Stream")
-        elif self.cameraSelector.currentText() == "Simulated":
+        elif self.camera_selector.currentText() == "Simulated":
             self.checkPCOcameraStatus.setVisible(False)
             self.widthButton.setEnabled(True); self.heightButton.setEnabled(True)
             if not(self.generateException.isVisible()):  # return the visibility of the button
                 self.generateException.setVisible(True)
             self.snapSingleImgButton.setText("Generate Single Pic"); self.continuousStreamButton.setText("Continuous Generation")
 
-    def activeCameraChanged(self):
+    def active_camera_changed(self):
         """
         Handle changing of active (selected) camera.
 
@@ -246,10 +253,10 @@ class SimUscope(QMainWindow):
         self.snapSingleImgButton.setDisabled(True); self.continuousStreamButton.setDisabled(True)  # activate after initialization
         self.camera_handle = CameraWrapper(self.messages2Camera, self.exceptions_queue, self.images_queue, self.camera_messages,
                                            self.exposureTimeButton.value(), self.img_width_default, self.img_height_default,
-                                           camera_type=self.cameraSelector.currentText())
+                                           camera_type=self.camera_selector.currentText())
         self.camera_handle.start()   # Start the main loop in the Camera for receiving the commands
         # PCO camera demands long time for initialization, if below - for waiting it to finish everything
-        if self.cameraSelector.currentText() == "PCO":
+        if self.camera_selector.currentText() == "PCO":
             # Below - the flag to delay this code to wait of confirmation that camera initialized
             received_initialization_confirmation = False
             message = "-"  # empty message
@@ -266,14 +273,14 @@ class SimUscope(QMainWindow):
                 time.sleep(0.08)  # sleep before checks for receiving the confirmation about initialization
             print("Confirmation received:", message)
         self.snapSingleImgButton.setEnabled(True); self.continuousStreamButton.setEnabled(True)
-        # Below - associated with the selected camera pecularities
-        if self.cameraSelector.currentText() == "PCO":
+        # Below - associated with the selected camera peculiarities
+        if self.camera_selector.currentText() == "PCO":
             self.widthButton.setDisabled(True); self.heightButton.setDisabled(True)  # PCO doesn't support arbitrary size changes
             self.generateException.setVisible(False)  # Remove button for testing of handling of generated Exceptions
             # Changing the titles of the buttons for controlling getting the images (from the camera or generated ones)
             self.snapSingleImgButton.setText("Single Snap Image"); self.continuousStreamButton.setText("Live Stream")
             self.checkPCOcameraStatus.setVisible(True)
-        elif self.cameraSelector.currentText() == "Simulated":
+        elif self.camera_selector.currentText() == "Simulated":
             self.checkPCOcameraStatus.setVisible(False)
             self.widthButton.setEnabled(True); self.heightButton.setEnabled(True)
             if not(self.generateException.isVisible()):  # return the visibility of the button
@@ -320,7 +327,7 @@ class SimUscope(QMainWindow):
             # Activate generation or Live imaging
             self.toggleTestPerformance.setDisabled(True)  # Disable it for preventing test on during continuous generation
             self.exposureTimeButton.setDisabled(True)  # Disable the exposure time control
-            self.widthButton.setDisabled(True); self.heightButton.setDisabled(True); self.cameraSelector.setDisabled(True)
+            self.widthButton.setDisabled(True); self.heightButton.setDisabled(True); self.camera_selector.setDisabled(True)
             self.snapSingleImgButton.setDisabled(True)
             # Below - initialization of the imported class for continuous image generation
             self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
@@ -337,7 +344,7 @@ class SimUscope(QMainWindow):
             # Return buttons to active state below
             self.snapSingleImgButton.setEnabled(True)
             self.toggleTestPerformance.setEnabled(True); self.exposureTimeButton.setEnabled(True)
-            self.widthButton.setEnabled(True); self.heightButton.setEnabled(True); self.cameraSelector.setEnabled(True)
+            self.widthButton.setEnabled(True); self.heightButton.setEnabled(True); self.camera_selector.setEnabled(True)
 
     def update_image(self):
         """
@@ -357,6 +364,7 @@ class SimUscope(QMainWindow):
             self.continuousStreamButton.click()  # should deactivate the live stream
         timeoutWait = round(self.wait_multiplicator*self.exposureTimeButton.value())  # timeout to wait the image on the queue
         # For assessing the performance - calculate the mean time of representation
+        measured_passed_t = np.zeros(5, dtype='int'); j = 0; t1 = time.time(); i = 0  # for avoiding referencing before assignment warning
         if self.toggleTestPerformance.isChecked():
             measured_passed_t = np.zeros(101, dtype='int')
         # If instead of image generated only string, then the PCO (or other) camera hasn't been initialized
@@ -446,10 +454,10 @@ class SimUscope(QMainWindow):
 
         """
         self.img_width = self.widthButton.value(); self.img_height = self.heightButton.value()
-        if self.cameraSelector.currentText() == "Simulated":
+        if self.camera_selector.currentText() == "Simulated":
             self.messages2Camera.put_nowait(("Change simulate picture sizes to:", (self.img_width, self.img_height)))
 
-    def activateMouseOnImage(self):
+    def change_mouse_ctrl_on_image(self):
         """
         Activate or Deactivate mouse handling of images - zooming in / out.
 
@@ -458,8 +466,8 @@ class SimUscope(QMainWindow):
         None.
 
         """
-        self.plot.getViewBox().setMouseEnabled(self.switchMouseCtrlImage.isChecked(), self.switchMouseCtrlImage.isChecked())
-        if not(self.switchMouseCtrlImage.isChecked()):  # switched from enabled to disabled state
+        self.plot.getViewBox().setMouseEnabled(self.switch_mouse_ctrl_image.isChecked(), self.switch_mouse_ctrl_image.isChecked())
+        if not(self.switch_mouse_ctrl_image.isChecked()):  # switched from enabled to disabled state
             self.flag_auto_range = True  # All new images will be auto-centralized
             self.plot.getViewBox().enableAutoRange(enable=True)  # "Centralize" the image by auto range on axes
         else:
@@ -704,15 +712,14 @@ class SimUscope(QMainWindow):
         None.
 
         """
-        # TODO: implementattion
         if self.fft_transform_window is None:
             self.fft_transform_window = FourierTransformCtrlWindow(self); self.fft_transform_window.show()
-            self.fft_transform_window.setGeometry(1080, 100, 600, 700)  # ??? hard-coded
+            self.fft_transform_window.setGeometry(1084, 100, 600, 700)  # ??? hard-coded
         else:
             if not self.__flag_live_stream:
                 self.fft_transform_window.refresh_plot()
             else:
-                pass  # Initialize live stream calculation
+                pass  # Initialize live stream calculation - ??? - is it needed?
 
     def closeEvent(self, closeEvent):
         """
@@ -796,5 +803,5 @@ class SimUscope(QMainWindow):
 if __name__ == "__main__":
     my_app = QApplication([])  # application without any command-line arguments
     # my_app.setQuitOnLastWindowClosed(True)  # forcing the quit of the application window for returning to the kernel
-    main_window = SimUscope(width_default, height_default, my_app); main_window.show()
+    main_window = SimUscope(my_app); main_window.show()
     my_app.exec()  # Execute the application in the main kernel
