@@ -109,21 +109,21 @@ class SimUscope(QMainWindow):
         self.widthROI.setKeyboardTracking(False); self.heightROI.setKeyboardTracking(False)
 
         # Push buttons for events evoking
-        self.snapSingleImgButton = QPushButton("Generate Single Pic")
-        self.snapSingleImgButton.clicked.connect(self.snap_single_img)
+        self.snap_image_button = QPushButton("Generate Single Pic")
+        self.snap_image_button.clicked.connect(self.snap_single_img)
         self.continuousStreamButton = QPushButton("Continuous Generation")  # Switches on/off continuous generation
         self.toggleTestPerformance = QCheckBox("Test Performance"); self.toggleTestPerformance.setEnabled(True)
         self.toggleTestPerformance.setChecked(False)  # setChecked - set the state of a button
         self.continuousStreamButton.clicked.connect(self.continuous_stream); self.continuousStreamButton.setCheckable(True)
-        self.disableAxesOnImageButton = QPushButton("Disable axes on image"); self.disableAxesOnImageButton.setCheckable(True)
-        self.disableAxesOnImageButton.clicked.connect(self.disableAxesOnImage)
+        self.disable_axes_button = QPushButton("Disable axes on image"); self.disable_axes_button.setCheckable(True)
+        self.disable_axes_button.clicked.connect(self.ctrl_axes_on_image)
         self.disableAutoLevelsButton = QPushButton("Disable pixels leveling"); self.disableAutoLevelsButton.setCheckable(True)
         self.disableAutoLevelsButton.clicked.connect(self.disableAutoLevelsCalculation)
         self.exposureTimeButton = QSpinBox(); self.exposureTimeButton.setSingleStep(1); self.exposureTimeButton.setSuffix(" ms")
         self.exposureTimeButton.setPrefix("Exposure time: "); self.exposureTimeButton.setMinimum(1)
         self.exposureTimeButton.setMaximum(1000); self.exposureTimeButton.setValue(100)
-        self.exposureTimeButton.adjustSize(); self.checkPCOcameraStatus = QPushButton("Check camera status")
-        self.checkPCOcameraStatus.setVisible(False); self.checkPCOcameraStatus.clicked.connect(self.checkCameraStatus)
+        self.exposureTimeButton.adjustSize(); self.get_camera_status_button = QPushButton("Check camera status")
+        self.get_camera_status_button.setVisible(False); self.get_camera_status_button.clicked.connect(self.get_camera_status)
         self.exposureTimeButton.setKeyboardTracking(False)  # !!! disable emitting of signals for each typed value
         # E.g., when the user is typing "100" => emit 3 signals for 3 numbers, if keyboardTracking(True)
         self.exposureTimeButton.valueChanged.connect(self.exposureTimeChanged)
@@ -159,7 +159,7 @@ class SimUscope(QMainWindow):
         # Grid layout below - the main layout pattern for all buttons and windows put on the Main Window (GUI)
         grid = QGridLayout(self.qwindow)  # grid layout allows better layout of buttons and frames
         grid.addLayout(vboxSelector, 0, 0, 1, 1)  # Add selector of a camera
-        grid.addWidget(self.snapSingleImgButton, 0, 1, 1, 1); grid.addWidget(self.continuousStreamButton, 0, 2, 1, 1)
+        grid.addWidget(self.snap_image_button, 0, 1, 1, 1); grid.addWidget(self.continuousStreamButton, 0, 2, 1, 1)
         grid.addWidget(self.toggleTestPerformance, 0, 3, 1, 1); grid.addWidget(self.exposureTimeButton, 0, 4, 1, 1)
         # vbox below - container for Height / Width buttons
         vbox = QVBoxLayout(); self.widthButton = QSpinBox(); self.heightButton = QSpinBox(); vbox.addWidget(self.widthButton)
@@ -171,9 +171,9 @@ class SimUscope(QMainWindow):
         grid.addWidget(self.saveSnapImg, 7, 1, 1, 1); grid.addWidget(self.putROI, 7, 2, 1, 1)
         grid.addLayout(vboxROI, 7, 3, 1, 1); grid.addWidget(self.generateException, 7, 6, 1, 1)
         grid.addWidget(self.cropImageButton, 7, 4, 1, 1); grid.addWidget(self.restoreFullImgButton, 7, 5, 1, 1)
-        grid.addWidget(self.disableAxesOnImageButton, 1, 6, 1, 1); grid.addWidget(self.disableAutoLevelsButton, 2, 6, 1, 1)
+        grid.addWidget(self.disable_axes_button, 1, 6, 1, 1); grid.addWidget(self.disableAutoLevelsButton, 2, 6, 1, 1)
         grid.addLayout(vboxLevels, 3, 6, 1, 1, Qt.AlignCenter)  # adding the min / max pixel values
-        grid.addWidget(self.checkPCOcameraStatus, 7, 6, 1, 1); grid.addWidget(self.fft_transform_button, 6, 6, 1, 1)
+        grid.addWidget(self.get_camera_status_button, 7, 6, 1, 1); grid.addWidget(self.fft_transform_button, 6, 6, 1, 1)
 
         # Set valueChanged event handlers
         self.widthButton.valueChanged.connect(self.image_size_changed)
@@ -219,20 +219,20 @@ class SimUscope(QMainWindow):
                     pass
                 time.sleep(0.08)  # sleep before checks for receiving the confirmation about initialization
             print("Confirmation received:", message)
-            self.checkPCOcameraStatus.setVisible(True)
+            self.get_camera_status_button.setVisible(True)
         # Below - associated with the selected camera peculiarities
         if self.camera_selector.currentText() == "PCO":
             # PCO camera cannot support arbitrary size changes
             self.widthButton.setDisabled(True); self.heightButton.setDisabled(True)
             self.generateException.setVisible(False)  # Remove button for testing of handling of generated Exceptions
             # Changing the titles of the buttons for controlling getting the images (from the camera or generated ones)
-            self.snapSingleImgButton.setText("Single Snap Image"); self.continuousStreamButton.setText("Live Stream")
+            self.snap_image_button.setText("Single Snap Image"); self.continuousStreamButton.setText("Live Stream")
         elif self.camera_selector.currentText() == "Simulated":
-            self.checkPCOcameraStatus.setVisible(False)
+            self.get_camera_status_button.setVisible(False)
             self.widthButton.setEnabled(True); self.heightButton.setEnabled(True)
             if not(self.generateException.isVisible()):  # return the visibility of the button
                 self.generateException.setVisible(True)
-            self.snapSingleImgButton.setText("Generate Single Pic"); self.continuousStreamButton.setText("Continuous Generation")
+            self.snap_image_button.setText("Generate Single Pic"); self.continuousStreamButton.setText("Continuous Generation")
 
     def active_camera_changed(self):
         """
@@ -250,7 +250,7 @@ class SimUscope(QMainWindow):
             self.camera_handle.join(timeout=self.global_timeout)  # wait for exiting from the evoked process
         print("Previous camera deinitialized")
         # Initialize the Camera class with the selected camera type by the user (button)
-        self.snapSingleImgButton.setDisabled(True); self.continuousStreamButton.setDisabled(True)  # activate after initialization
+        self.snap_image_button.setDisabled(True); self.continuousStreamButton.setDisabled(True)  # activate after initialization
         self.camera_handle = CameraWrapper(self.messages2Camera, self.exceptions_queue, self.images_queue, self.camera_messages,
                                            self.exposureTimeButton.value(), self.img_width_default, self.img_height_default,
                                            camera_type=self.camera_selector.currentText())
@@ -272,20 +272,20 @@ class SimUscope(QMainWindow):
                     pass
                 time.sleep(0.08)  # sleep before checks for receiving the confirmation about initialization
             print("Confirmation received:", message)
-        self.snapSingleImgButton.setEnabled(True); self.continuousStreamButton.setEnabled(True)
+        self.snap_image_button.setEnabled(True); self.continuousStreamButton.setEnabled(True)
         # Below - associated with the selected camera peculiarities
         if self.camera_selector.currentText() == "PCO":
             self.widthButton.setDisabled(True); self.heightButton.setDisabled(True)  # PCO doesn't support arbitrary size changes
             self.generateException.setVisible(False)  # Remove button for testing of handling of generated Exceptions
             # Changing the titles of the buttons for controlling getting the images (from the camera or generated ones)
-            self.snapSingleImgButton.setText("Single Snap Image"); self.continuousStreamButton.setText("Live Stream")
-            self.checkPCOcameraStatus.setVisible(True)
+            self.snap_image_button.setText("Single Snap Image"); self.continuousStreamButton.setText("Live Stream")
+            self.get_camera_status_button.setVisible(True)
         elif self.camera_selector.currentText() == "Simulated":
-            self.checkPCOcameraStatus.setVisible(False)
+            self.get_camera_status_button.setVisible(False)
             self.widthButton.setEnabled(True); self.heightButton.setEnabled(True)
             if not(self.generateException.isVisible()):  # return the visibility of the button
                 self.generateException.setVisible(True)
-            self.snapSingleImgButton.setText("Generate Single Pic"); self.continuousStreamButton.setText("Continuous Generation")
+            self.snap_image_button.setText("Generate Single Pic"); self.continuousStreamButton.setText("Continuous Generation")
 
     def snap_single_img(self):
         """
@@ -328,7 +328,7 @@ class SimUscope(QMainWindow):
             self.toggleTestPerformance.setDisabled(True)  # Disable it for preventing test on during continuous generation
             self.exposureTimeButton.setDisabled(True)  # Disable the exposure time control
             self.widthButton.setDisabled(True); self.heightButton.setDisabled(True); self.camera_selector.setDisabled(True)
-            self.snapSingleImgButton.setDisabled(True)
+            self.snap_image_button.setDisabled(True)
             # Below - initialization of the imported class for continuous image generation
             self.messages2Camera.put_nowait("Start Live Stream")  # Send this command to the wrapper class
             self.imageUpdater = Thread(target=self.update_image, args=())  # assign updating of images to the evoked Thread
@@ -342,7 +342,7 @@ class SimUscope(QMainWindow):
             if not(self.messages2Camera.full()):
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
             # Return buttons to active state below
-            self.snapSingleImgButton.setEnabled(True)
+            self.snap_image_button.setEnabled(True)
             self.toggleTestPerformance.setEnabled(True); self.exposureTimeButton.setEnabled(True)
             self.widthButton.setEnabled(True); self.heightButton.setEnabled(True); self.camera_selector.setEnabled(True)
 
@@ -633,7 +633,7 @@ class SimUscope(QMainWindow):
             self.messages2Camera.put_nowait("Restore Full Frame")
         self.restoreFullImgButton.setDisabled(True)
 
-    def disableAxesOnImage(self):
+    def ctrl_axes_on_image(self):
         """
         Disable / enable representation of axes of generated / acquired images.
 
@@ -643,8 +643,8 @@ class SimUscope(QMainWindow):
 
         """
         # Disable showing the axes on the image
-        self.imageWidget.getView().showAxis("left", show=not(self.disableAxesOnImageButton.isChecked()))
-        self.imageWidget.getView().showAxis("bottom", show=not(self.disableAxesOnImageButton.isChecked()))
+        self.imageWidget.getView().showAxis("left", show=not(self.disable_axes_button.isChecked()))
+        self.imageWidget.getView().showAxis("bottom", show=not(self.disable_axes_button.isChecked()))
 
     def disableAutoLevelsCalculation(self):
         """
@@ -691,7 +691,7 @@ class SimUscope(QMainWindow):
             self.imageWidget.getImageItem().setLevels([self.minLevelButton.value(),
                                                        self.maxLevelButton.value()], update=False)
 
-    def checkCameraStatus(self):
+    def get_camera_status(self):
         """
         Ask for the current camera status for the real PCO camera.
 

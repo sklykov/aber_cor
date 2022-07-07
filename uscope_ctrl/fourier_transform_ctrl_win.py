@@ -7,7 +7,7 @@ Rewrite methods of QMainWindow from PyQT5 for further using it for FFT calculati
 """
 # %% Import section
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QGridLayout, QPushButton, QSpinBox,
-                             QDoubleSpinBox, QComboBox, QCheckBox, QTextEdit)
+                             QDoubleSpinBox, QComboBox, QCheckBox)
 import numpy as np
 from numpy import fft
 from matplotlib.backends.backend_qtagg import FigureCanvas, NavigationToolbar2QT as NavigationToolbar
@@ -17,6 +17,7 @@ from matplotlib.patches import Circle
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from multiprocessing import Queue as mpQueue
+from multiprocessing import Process
 import time
 
 
@@ -29,17 +30,26 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.main_class = main_class_instance
         self.setWindowTitle("Fourier Transform and Processing")
         self.image_quality_metric = 0.0; self.aberrations_selectors = {}
-        self.ctrl_script_handle = None; self.aberrations_selector_window = None
+        self.aberrations_selector_window = None
+        # Not the best practice to hard code sizes, but allows to fast prototype the GUI
+        self.aberration_selector_width_const = 136; self.aberration_selector_pad = 10
+        self.aberration_selector_height_const = 20
+        self.aberrations_for_corrections = {}
+        self.ctrl_dpp_prc = None; self.aberrations_queue = None
+        self.r1 = 1; self.r2 = 11
 
         # Buttons specification
         self.recalculate_button = QPushButton("Recalculate metric")
         self.recalculate_button.clicked.connect(self.calculate_image_quality_metric)
         self.open_ctrl_button = QPushButton("Open DPP ctrl")
-        self.open_ctrl_button.clicked.connect(self.open_ctrl_program)
-        self.applied_aberrations_ctrl_button = QPushButton("Select aberrations")
-        self.applied_aberrations_ctrl_button.clicked.connect(self.open_aberrations_selector)
+        self.open_ctrl_button.clicked.connect(self.open_device_ctrl_program)
+        self.select_aberrations_ctrl_button = QPushButton("Select aberrations")
+        self.select_aberrations_ctrl_button.clicked.connect(self.open_aberrations_selector)
+        self.apply_correction_button = QPushButton("Apply Correction")
+        self.apply_correction_button.clicked.connect(self.apply_correction)
+        self.apply_correction_button.setEnabled(False)
 
-        # Radiuses for metric calculation selectors specification
+        # Radius for metric calculation selectors specification
         self.r_min = QSpinBox(); self.r_min.setSingleStep(1); self.r_min.setMaximum(98)
         self.r_max = QSpinBox(); self.r_max.setSingleStep(1); self.r_max.setMaximum(100)
         self.r_min.setMinimum(1); self.r_max.setMinimum(2); self.r_min.setValue(1); self.r_max.setValue(11)
@@ -64,7 +74,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         self.orders_names = ["1st order", "2nd order", "3rd order", "4th order",
                              "5th order", "6th order", "7th order"]
         self.max_order_selector = QComboBox(); self.max_order_selector.addItems(self.orders_names)
-        self.max_order_selector.setCurrentText(self.orders_names[1])  # default maximum order
+        self.max_order_selector.setCurrentText(self.orders_names[3])  # default maximum order
         self.max_order_selector.currentTextChanged.connect(self.max_order_changed)  # handling max order choosing
         self.max_order_selector.setEditable(True)  # setEditable is for setAlignment
         self.max_order_selector.lineEdit().setAlignment(Qt.AlignCenter)
@@ -93,9 +103,11 @@ class FourierTransformCtrlWindow(QMainWindow):
         grid.addWidget(self.r_max, 5, 2, 1, 1); grid.addWidget(self.open_ctrl_button, 6, 0, 1, 1)
         grid.addWidget(self.bias_min, 6, 1, 1, 1); grid.addWidget(self.bias_max, 6, 2, 1, 1)
         grid.addWidget(self.max_order_selector, 7, 0, 1, 1)
-        grid.addWidget(self.applied_aberrations_ctrl_button, 7, 1, 1, 1)
+        grid.addWidget(self.select_aberrations_ctrl_button, 7, 1, 1, 1)
+        grid.addWidget(self.apply_correction_button, 7, 2, 1, 1)
 
         self.plot_fourier_transform()  # call the plotting function
+        self.get_default_active_aberrations()  # call initialization of the aberrations for correction
 
         if hasattr(self.main_class, "flag_live_stream"):
             if self.main_class.flag_live_stream:
@@ -235,7 +247,7 @@ class FourierTransformCtrlWindow(QMainWindow):
         if self.bias_max.value() <= self.bias_min.value():
             self.bias_min.setValue(self.bias_min.value() - 0.2)
 
-    def open_ctrl_program(self):
+    def open_device_ctrl_program(self):
         """
         Open the controlling of DPP program.
 
@@ -247,18 +259,61 @@ class FourierTransformCtrlWindow(QMainWindow):
         try:
             from dpp_ctrl import gui_dpp_ctrl
             try:
-                aberrations_queue = mpQueue(maxsize=5)
-                self.ctrl_dpp_prc = gui_dpp_ctrl.IndPrcLauncher(aberrations_queue)
+                self.aberrations_queue = mpQueue(maxsize=8)
+                self.ctrl_dpp_prc = gui_dpp_ctrl.IndPrcLauncher(self.aberrations_queue)
                 self.ctrl_dpp_prc.start()
-                time.sleep(5); aberrations = {"0, 2": 0.5, "1,1": -0.5}
-                aberrations_queue.put_nowait(aberrations)
+                # time.sleep(5); aberrations = {"0, 2": 0.5, "1,1": -0.5}
+                # self.aberrations_queue.put_nowait(aberrations)  # testing sending aberrations
             except AttributeError:
                 # Use the general launcher of the controlling program
                 print("External aberrations specifying not launched")
                 gui_dpp_ctrl.external_default_launch()
+                self.ctrl_dpp_prc = "camera handle"
             self.bias_min.setEnabled(True); self.bias_max.setEnabled(True)  # enable bias ctrls
-        except ModuleNotFoundError:
+            self.apply_correction_button.setEnabled(True)
+        except (ModuleNotFoundError, ImportError):
             print("Check that the DPP controlling program is installed in the active environment")
+
+    def get_aberrations_selector_window_sizes(self):
+        """
+        Recalculate the aberrations selectors window depending on the maximum selected order.
+
+        Returns
+        -------
+        None.
+
+        """
+        # Define the current selected maximal polynomial order
+        for i, order in enumerate(self.orders_names):
+            if order == self.max_order_selector.currentText():
+                break
+        self.aberrations_selector_window_w = ((i+7)*self.aberration_selector_pad
+                                              + (i+2)*self.aberration_selector_width_const)
+        self.aberrations_selector_window_h = ((i+1)*self.aberration_selector_height_const
+                                              + 2*(i+1)*self.aberration_selector_pad
+                                              + 4*i*self.aberration_selector_pad)
+
+    def get_default_active_aberrations(self):
+        """
+        Select default aberrations for corrections.
+
+        Returns
+        -------
+        None.
+
+        """
+        for order in range(1, 8):
+            m = -order; n = order
+            for polynomial in range(order + 1):
+                if n == 1:  # tip and tilt
+                    self.aberrations_for_corrections[(m, n)] = False
+                elif m == 0 and n == 2:  # defocus
+                    self.aberrations_for_corrections[(m, n)] = True
+                elif 3 <= n <= 4:  # 3th and 4th order aberrations
+                    self.aberrations_for_corrections[(m, n)] = False
+                else:
+                    self.aberrations_for_corrections[(m, n)] = False
+                m += 2
 
     def open_aberrations_selector(self):
         """
@@ -276,36 +331,117 @@ class FourierTransformCtrlWindow(QMainWindow):
             self.aberrations_sel_widget = QWidget(parent=self.aberrations_selector_window)
             self.aberrations_selector_window.setCentralWidget(self.aberrations_sel_widget)
             self.aberrations_selector_window.setWindowTitle("Select correcting aberrations")
-            self.aberrations_selector_window_w = 580; self.aberrations_selector_window_h = 500
-            self.aberrations_selector_window.setGeometry(300, 300, self.aberrations_selector_window_w,
+            # self.aberrations_selector_window_w = 1240; self.aberrations_selector_window_h = 400
+            self.get_aberrations_selector_window_sizes()
+            self.aberrations_selector_window.setGeometry(30, 200, self.aberrations_selector_window_w,
                                                          self.aberrations_selector_window_h)
             self.create_check_boxes_for_aberrations()
         elif not self.aberrations_selector_window.isVisible():
             self.aberrations_selector_window.show()
 
     def create_check_boxes_for_aberrations(self):
+        """
+        Create check boxes which allow to activate / disactivate aberrations for corrections.
+
+        Returns
+        -------
+        None.
+
+        """
         try:
             from dpp_ctrl import zernike_pol_calc
-        except ModuleNotFoundError:
-            print("Check that dpp-ctrl module installed by pip")
-        # Create single check box with name (picture?)
-        self.aberrations_selectors[(-1, 1)] = QCheckBox((str((-1, 1)) + " "
-                                                         + zernike_pol_calc.get_classical_polynomial_name(mode=(-1, 1),
-                                                                                                          short_names=True)),
-                                                        parent=self.aberrations_sel_widget)
-        self.aberrations_selectors[(-1, 1)].setFont(QFont("Liberation Sans", 9, QFont.Bold))
-        self.aberration_selector_width = self.aberrations_selectors[(-1, 1)].geometry().width()
-        self.aberration_selector_width = self.aberrations_selectors[(-1, 1)].geometry().height()
-        # self.aberrations_selectors[(-1, 1)].setChecked(False); self.aberrations_selectors[(-1, 1)].move(25, 25)
-        # Define the selected max order
-        for i, order in enumerate(self.orders_names):
-            if order == self.max_order_selector.currentText():
-                break
-        max_order = i+1
-        # self.aberrations_selector_window.update()
+            # Create single check box with name (picture?) for getting geometry properties
+            self.aberrations_selectors[(-1, 1)] = QCheckBox((str((-1, 1)) + " "
+                                                             + zernike_pol_calc.get_classical_polynomial_name((-1, 1), True)),
+                                                            parent=self.aberrations_sel_widget)
+            self.aberrations_selectors[(-1, 1)].setFont(QFont("Liberation Sans", 8, QFont.Bold))
+            self.aberrations_selectors[(-1, 1)].updateGeometry()
+            self.aberrations_selectors[(-1, 1)].stateChanged.connect(self.change_aberrations_for_corrections)
+            # self.aberration_selector_width = self.aberrations_selectors[(-1, 1)].sizeHint().width()
+            self.aberration_selector_width = self.aberration_selector_width_const
+            self.aberration_selector_height = self.aberrations_selectors[(-1, 1)].sizeHint().height()
+            self.vertical_pos = self.aberration_selector_pad
+            self.horizontal_pos = (self.aberrations_selector_window_w - self.aberration_selector_pad
+                                   - 2*self.aberration_selector_width)//2
+            self.aberrations_selectors[(-1, 1)].move(self.horizontal_pos, self.vertical_pos)
+            # Define the selected max order
+            for i, order in enumerate(self.orders_names):
+                if order == self.max_order_selector.currentText():
+                    break
+            max_order = i+1
+            for order in range(1, max_order + 1):
+                m = -order; n = order
+                for polynomial in range(order + 1):
+                    if m == -1 and n == 1:
+                        m += 2
+                        self.horizontal_pos += (self.aberration_selector_width + self.aberration_selector_pad)
+                        continue
+                    else:
+                        # Create the checkboxes for activate / disactivate aberration corrections
+                        short_name = zernike_pol_calc.get_classical_polynomial_name((m, n), True)
+                        self.aberrations_selectors[(m, n)] = QCheckBox(str((m, n)) + " " + short_name,
+                                                                       parent=self.aberrations_sel_widget)
+                        self.aberrations_selectors[(m, n)].setFont(QFont("Liberation Sans", 8, QFont.Bold))
+                        self.aberrations_selectors[(m, n)].updateGeometry()
+                        self.aberrations_selectors[(m, n)].stateChanged.connect(self.change_aberrations_for_corrections)
+                        self.aberration_selector_width = self.aberrations_selectors[(m, n)].sizeHint().width()
+                        self.aberrations_selectors[(m, n)].move(self.horizontal_pos, self.vertical_pos)
+                        self.horizontal_pos += (self.aberration_selector_width + self.aberration_selector_pad)
+                        # Activate default aberrations for corrections
+                        if self.aberrations_for_corrections[(m, n)]:
+                            self.aberrations_selectors[(m, n)].setChecked(True)
+                        m += 2
+                self.aberration_selector_width = self.aberration_selector_width_const
+                self.vertical_pos += self.aberration_selector_height + 4*self.aberration_selector_pad
+                self.horizontal_pos = (self.aberrations_selector_window_w
+                                       - ((order+2)*self.aberration_selector_width
+                                          + (order+1)*self.aberration_selector_pad))//2
+        except (ModuleNotFoundError, ImportError):
+            print("No window opened, check that dpp-ctrl module installed by pip")
+            self.aberrations_selector_window.close(); self.aberrations_selector_window = None
 
     def max_order_changed(self):
-        pass
+        """
+        Handle changing of the maximum order selector (resize window and put additional controls).
+
+        Returns
+        -------
+        None.
+
+        """
+        if self.aberrations_selector_window is not None and self.aberrations_selector_window.isVisible():
+            self.aberrations_selector_window.close(); self.aberrations_selector_window = None
+            self.open_aberrations_selector()
+        elif self.aberrations_selector_window is not None and not self.aberrations_selector_window.isVisible():
+            self.aberrations_selector_window.close(); self.aberrations_selector_window = None
+            self.open_aberrations_selector(); self.aberrations_selector_window.hide()
+
+    def change_aberrations_for_corrections(self):
+        """
+        Update selected aberrations for corrections.
+
+        Returns
+        -------
+        None.
+
+        """
+        for key, item in self.aberrations_selectors.items():
+            self.aberrations_for_corrections[key] = item.isChecked()
+
+    def apply_correction(self):
+        if self.ctrl_dpp_prc is None or isinstance(self.ctrl_dpp_prc, str):
+            self.apply_correction_button.setEnabled(False)
+            self.bias_min.setEnabled(False); self.bias_max.setEnabled(False)
+        elif isinstance(self.ctrl_dpp_prc, Process):
+            # Automatic ongoing live stream and stopping it
+            if self.main_class.flag_live_stream:
+                self.main_class.continuousStreamButton.click()
+            print("Start correction procedure")
+            for key, item in self.aberrations_for_corrections.items():
+                if item:
+                    aberration = {}; aberration[str(key)] = self.bias_min.value()
+                    self.aberrations_queue.put_nowait(aberration)
+            print("Finish correction procedure")
 
     def closeEvent(self, closing_event):
         """
@@ -321,7 +457,10 @@ class FourierTransformCtrlWindow(QMainWindow):
         None.
 
         """
-        if self.ctrl_script_handle is not None:
-            self.ctrl_script_handle.destroy()
+        if isinstance(self.ctrl_dpp_prc, Process):
+            # close the opened independent process along with this window
+            if self.ctrl_dpp_prc.is_alive():
+                self.aberrations_queue.put_nowait("Exit")  # send the exit command
+                self.ctrl_dpp_prc.join(timeout=1)
         self.main_class.fft_transform_window = None
         self.close()
