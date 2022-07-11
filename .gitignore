@@ -3,10 +3,17 @@ docs/
 documentation/
 Docs/
 SimUscope/*.tiff  # testing acquisitions / file saving
+*.doc
+*.docx
+*.pdf
 
 # Driver libraries for the device (below) - not public yet
 /dpp/*
 dpp/*
+
+# Controlling PCO camera GUI shifted to another repositiry - exclude it from version control
+/uscope_ctrl/*
+uscope_ctrl/*
 
 # Specifics from PyCharm
 .idea/
