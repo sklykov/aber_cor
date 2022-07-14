@@ -12,7 +12,7 @@ import os
 import numpy as np
 
 # %% Transform a *mat file to a *csv file
-mat_file_name = "test2.csv"
+mat_file_name = "test.mat"
 test_file_path = os.path.join(os.path.dirname(__file__), mat_file_name)
 matrix = None
 if os.path.isfile(test_file_path):
@@ -36,8 +36,8 @@ if os.path.isfile(test_file_path):
                         if n > 1:
                             test_writer.writerow(matrix[i, 0:n])
                         else:
-
                             test_writer.writerow(matrix[i])
+
 # %% Read a matrix from a *csv file
 csv_file_name = "test2.csv"
 test_csv_path = os.path.join(os.path.dirname(__file__), csv_file_name)
@@ -52,13 +52,16 @@ if os.path.isfile(test_csv_path):
             if line_count == 0:
                 # initialize matrix for storing values (assuming that matrix has 2 dimensions)
                 read_matrix = np.zeros(shape=(lines_number, len(row)))
-            for i in range(len(row)):
-                row[i] = row[i].replace(',', '.')  # if the float number separated by comma not dot in a file
-                try:
-                    read_matrix[line_count, i] = float(row[i])
-                except ValueError:
-                    raise(Exception("Error raised during attempt to convert '" + row[i]
-                                    + "' - read value on row, column: " + f"{line_count, i}"))
+            try:
+                for i in range(len(row)):
+                    row[i] = row[i].replace(',', '.')  # if the float number separated by comma not dot in a file
+                    try:
+                        read_matrix[line_count, i] = float(row[i])
+                    except ValueError:
+                        raise(ValueError("Error raised during attempt to convert '" + row[i]
+                                         + "' - read value on row, column: " + f"{line_count, i}"))
+            except ValueError as e:
+                print(e)
             line_count += 1
 
 # %% Check difference between write and read matrices
