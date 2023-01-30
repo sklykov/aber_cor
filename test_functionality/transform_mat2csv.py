@@ -2,8 +2,10 @@
 """
 Transform a *mat file to a *csv file.
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
+
 """
 # %% Imports
 import csv
@@ -58,8 +60,8 @@ if os.path.isfile(test_csv_path):
                     try:
                         read_matrix[line_count, i] = float(row[i])
                     except ValueError:
-                        raise(ValueError("Error raised during attempt to convert '" + row[i]
-                                         + "' - read value on row, column: " + f"{line_count, i}"))
+                        raise ValueError("Error raised during attempt to convert '" + row[i]
+                                         + "' - read value on row, column: " + f"{line_count, i}")
             except ValueError as e:
                 print(e)
             line_count += 1

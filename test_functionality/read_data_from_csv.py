@@ -2,8 +2,10 @@
 """
 Parse the tab-delimeted *csv to the numpy matrix.
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
+
 """
 # %% Imports
 import csv
@@ -56,8 +58,8 @@ def read_matrix_csv(abs_path_csv_file: str, delimeter: str = '\t') -> np.ndarray
                     try:
                         read_matrix[line_count, i] = float(row[i])
                     except ValueError:
-                        raise(ValueError("Error raised during attempt to convert to float number the value: '"
-                                         + row[i] + "' on row, column: " + f"{line_count, i}"))
+                        raise ValueError("Error raised during attempt to convert to float number the value: '"
+                                         + row[i] + "' on row, column: " + f"{line_count, i}")
                 line_count += 1
         return read_matrix
     else:

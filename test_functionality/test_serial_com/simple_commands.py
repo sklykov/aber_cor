@@ -2,7 +2,7 @@
 """
 Script for testing preconfigured Arduino board opened for serial communictation and connected on the specified port.
 
-@author: ssklykov
+@author: sklykov
 """
 # %% Imports
 import serial

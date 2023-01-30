@@ -2,8 +2,10 @@
 """
 Create a *json file using different keys, including saving huge data (numeric matrix).
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
+
 """
 # %% Imports
 import json
