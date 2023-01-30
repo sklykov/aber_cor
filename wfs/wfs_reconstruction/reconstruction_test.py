@@ -2,8 +2,10 @@
 """
 Compose tests for implemented modal phase wavefront reconstruction using decomposition to Zernike polynomials.
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
+
 """
 # %% Imports
 from calc_zernikes_sh_wfs import calc_integral_matrix_zernike
@@ -42,7 +44,7 @@ if repo_pics:
     # precalculated_zernikes2 = os.path.join(calibrations, "integral_calibration_matrix.npy")  # from UI calculations
     precalculated_nonaberrated = os.path.join(calibrations, "CoMsNonaberrated_RepoPics.npy")
     # precalculated_nonaberrated2 = os.path.join(calibrations, "detected_focal_spots.npy")  # from UI calculations
-    if not(os.path.exists(precalculated_zernikes)):
+    if not os.path.exists(precalculated_zernikes):
         t1 = time.time()  # get the current time measurement
         (coms_nonaberrated, pic_integral_limits,
          theta0, rho0, integration_limits) = get_integral_limits_nonaberrated_centers(plot_results=plot, threshold_abs=threshold,
@@ -52,7 +54,7 @@ if repo_pics:
         integral_matrix = calc_integral_matrix_zernike(zernikes_set, integration_limits, theta0, rho0, aperture_radius=aperture_radius,
                                                        n_steps=n_integration_steps, use_tabular_functions=True)
         np.save(precalculated_zernikes, integral_matrix)
-        if not(os.path.exists(precalculated_nonaberrated)):  # if CoMs from non-aberrated image not saved, save them
+        if not os.path.exists(precalculated_nonaberrated):  # if CoMs from non-aberrated image not saved, save them
             np.save(precalculated_nonaberrated, coms_nonaberrated)
         t2 = time.time()  # get the current time measurement
         if np.round(t2-t1, 3) > 60:
@@ -65,7 +67,8 @@ if repo_pics:
         # integral_matrix2 = np.load(precalculated_zernikes2); diff_int_matrices = integral_matrix2 - integral_matrix
         (coms_shifts, integral_matrix_aberrated) = get_coms_shifts(coms_nonaberrated, integral_matrix, plot_results=plot,
                                                                    threshold_abs=threshold, region_size=region_size)
-        alpha_coefficients = list(get_polynomials_coefficients(integral_matrix_aberrated, coms_shifts)*np.pi)  # !!! * by pi
+        # ??? Amplitudes transferred to ? (check the physical value) because of multiplication by pi
+        alpha_coefficients = list(get_polynomials_coefficients(integral_matrix_aberrated, coms_shifts)*np.pi)
         # Plotting the found reconstructed wavefront
         plot_zps_polar(zernikes_set, title="reconstruction of pics from the open repository",
                        alpha_coefficients=alpha_coefficients)
@@ -88,7 +91,7 @@ if shwfs:
     precalculated_zernikes = os.path.join(calibrations, "IntegralMatrix20TabZernike_RecordedAberrations.npy")
     precalculated_nonaberrated = os.path.join(calibrations, "CoMsNonaberrated_RecordedAberrations.npy")
     os.chdir(".."); os.chdir(".."); os.chdir("sh_wfs")  # Navigation to the local storage with recorded aberrations
-    if not(os.path.exists(precalculated_zernikes)):
+    if not os.path.exists(precalculated_zernikes):
         t1 = time.time()  # get the current time measurement
         (coms_nonaberrated, pic_integral_limits,
          theta0, rho0, integration_limits) = get_integral_limits_nonaberrated_centers(pics_folder=os.getcwd(),
@@ -101,7 +104,7 @@ if shwfs:
         integral_matrix = calc_integral_matrix_zernike(zernikes_set, integration_limits, theta0, rho0, aperture_radius=aperture_radius,
                                                        n_steps=n_integration_steps, use_tabular_functions=True)
         np.save(precalculated_zernikes, integral_matrix)
-        if not(os.path.exists(precalculated_nonaberrated)):  # if CoMs from non-aberrated image not saved, save them
+        if not os.path.exists(precalculated_nonaberrated):  # if CoMs from non-aberrated image not saved, save them
             np.save(precalculated_nonaberrated, coms_nonaberrated)
         t2 = time.time()  # get the current time measurement
         if np.round(t2-t1, 3) > 60:
@@ -114,7 +117,8 @@ if shwfs:
         (coms_shifts, integral_matrix_aberrated) = get_coms_shifts(coms_nonaberrated, integral_matrix,
                                                                    pics_folder=os.getcwd(), aberrated_pic_name=aberrated_pic_name,
                                                                    plot_results=plot, threshold_abs=threshold, region_size=region_size)
-        alpha_coefficients = list(get_polynomials_coefficients(integral_matrix_aberrated, coms_shifts)*np.pi)   # !!! * by pi
+        # ??? Amplitudes transferred to ? (check the physical value) because of multiplication by pi
+        alpha_coefficients = list(get_polynomials_coefficients(integral_matrix_aberrated, coms_shifts)*np.pi)
         # Plot the sum profile of all
         if aberrated_pic_name[0:7] == "Defocus":  # because naming was inverted in the recorded aberrations
             title_name = "astigmatism"

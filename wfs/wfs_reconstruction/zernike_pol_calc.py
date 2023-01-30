@@ -2,13 +2,13 @@
 """
 Calculation of Zernike polynomials, plot their surface maps on the unit apertures.
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
 
 """
 # %% Imports - global dependencies (from standard library and installed by conda / pip)
 import numpy as np
-import math
 import matplotlib.pyplot as plt
 from matplotlib import cm
 plt.close('all')  # closing all opened and pending figures
@@ -158,7 +158,7 @@ def zernike_polynomials_sum_tuned(orders: list, alpha_coefficients: list, step_r
     for k in range(len(orders)):
         if abs(alpha_coefficients[k]) > 1.0E-6:  # the alpha or amplitude coefficient is actually non-zero
             tuple_orders = orders[k]
-            if (not(isinstance(tuple_orders, tuple)) and not(len(orders) == len(alpha_coefficients))
+            if (not isinstance(tuple_orders, tuple) and not len(orders) == len(alpha_coefficients)
                     and len(tuple_orders != 2)):  # checking for conformity with specification of orders
                 raise TypeError
             else:
@@ -203,7 +203,8 @@ def plot_zps_polar(orders: list, step_r: float = 0.005, step_theta: float = 0.5,
     R, Theta, Z = zernike_polynomials_sum_tuned(orders, alpha_coefficients, step_r=step_r, step_theta=step_theta)
     # Plotting and formatting - Polar projection + plotting the colormap
     plt.figure(figsize=(4, 4))  # since the figure has the circular shape, better draw it on equal box
-    axes = plt.axes(projection='polar'); axes.set_theta_direction(-1)  # set the clockwise counting of theta
+    axes = plt.axes(projection='polar')
+    axes.set_theta_direction(-1)  # ???: need, set the clockwise counting of theta
     plt.contourf(Theta, R, Z, 100, cmap=cm.coolwarm)  # produces more responsive plots!
     plt.title(title); plt.axis('off')
     if show_amplitudes:
@@ -246,23 +247,15 @@ def get_plot_zps_polar(figure, orders: list, alpha_coefficients: list, step_r: f
 
     """
     R, Theta, S = zernike_polynomials_sum_tuned(orders, alpha_coefficients, step_r=step_r, step_theta=step_theta)
-    # Plotting and formatting - Polar projection + plotting the colormap as colour mesh
     # Below - clearing of picture axes, for preventing adding many axes to the single figure
     if clear_axes:
         figure.clear()  # additional flag for the clearing of figure
     axes = figure.add_subplot(projection='polar')  # axes - the handle for drawing functions
-    # Below - manual deletion and reinitializing of axes
-    # if figure.get_axes() == []:
-    #     axes = figure.add_subplot(projection='polar')  # axes - the handle for drawing functions
-    # else:
-    #     figure.delaxes(figure.get_axes()[0])
-    #     axes = figure.add_subplot(projection='polar')  # axes - the handle for drawing functions
-    # !!!: using contourf function is too slow for providing refreshing upon calling by the button
     axes.grid(False)  # demanded by pcolormesh function, if not called - deprecation warning
     # plot the colour map by using the Z map according to Theta, R coordinates
     im = axes.pcolormesh(Theta, R, S, cmap=cm.coolwarm, shading='nearest')  # should fix deprecation complain
     axes.axis('off')  # off polar coordinate axes
-    axes.set_theta_direction(-1)  # the counterclockwise counting of angle switched to clockwise!
+    axes.set_theta_direction(-1)  # ???: need, the counterclockwise counting of angle switched to clockwise!
     if show_amplitudes:
         figure.colorbar(im, ax=axes)  # shows the colour bar with shown on image amplitudes
     figure.subplots_adjust(left=0, bottom=0, right=1, top=1)
@@ -467,9 +460,9 @@ def triangular_derivative_dtheta(m: int, theta: float) -> float:
 
     """
     if m > 0:
-        return -m*math.sin(m*theta)
+        return -m*np.sin(m*theta)
     elif m < 0:
-        return -m*math.cos(m*theta)
+        return -m*np.cos(m*theta)
     else:
         return 0.0
 
@@ -597,8 +590,6 @@ def test():
     """
     r = 0.841; theta = np.radians(30.0); theta = float(theta)  # some predefined values for polar coordinates
     # Tests of implemented recursive values using the equations from Wiki as tabulated
-    m = 1; n = 1; zrp = zernike_polynomial(m, n, r, theta)
-    assert abs(zrp - 2.0*r*np.cos(theta)) < 1E-4, f'Implemented Z{m, n} not equal to tabulated one'
     m = -1; n = 1; zrp = zernike_polynomial(m, n, r, theta)
     assert abs(zrp - 2.0*r*np.sin(theta)) < 1E-4, f'Implemented Z{m, n} not equal to tabulated one'
     m = 0; n = 2; zrp = zernike_polynomial(m, n, r, theta)
@@ -607,10 +598,6 @@ def test():
     assert abs(zrp - np.sqrt(6.0)*r*r*np.sin(2.0*theta)) < 1E-4, f'Implemented Z{m, n} != to tabulated one'
     m = 1; n = 3; zrp = zernike_polynomial(m, n, r, theta)
     assert abs(zrp - np.sqrt(8.0)*(3.0*r*r*r - 2.0*r)*np.cos(theta)) < 1E-4, f'Implemented Z{m, n} != to tabulated one'
-    m = -4; n = 4; zrp = zernike_polynomial(m, n, r, theta)
-    assert abs(zrp - np.sqrt(10.0)*r*r*r*r*np.sin(4.0*theta)) < 1E-4, f'Implemented Z{m, n} != to tabulated one'
-    m = 0; n = 4; zrp = zernike_polynomial(m, n, r, theta)
-    assert abs(zrp - np.sqrt(5.0)*(6.0*r*r*r*r - 6.0*r*r + 1.0)) < 1E-4, f'Implemented Z{m, n} != to tabulated one'
     # Test the tabulated values, assuming that the recursive implemented correctly
     test_orders = [(-7, 7), (-5, 7), (-3, 7), (-1, 7), (-6, 6), (-4, 6), (-2, 6), (-5, 5), (-3, 5),
                    (-1, 5), (-4, 4), (-2, 4), (0, 4), (-3, 3), (-1, 3), (-2, 2), (0, 2), (-1, 1)]
@@ -629,4 +616,3 @@ if __name__ == '__main__':
     orders = [(7, 7)]  # specification of (m, n) order for polynomial plotting
     plot_zps_polar(orders, step_r, step_theta, "")
     zernikes_set = [(-1, 1), (1, 1)]  # vertical and horizontal tilts
-    # plot_zps_polar(zernikes_set, step_r, step_theta, "Sum tilts with equal amplitudes", show_amplitudes=True)

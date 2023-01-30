@@ -4,8 +4,10 @@ Class wrapper for controlling the IDS or simulated camera using separate process
 
 It implements API functions provided in the IDS controlling library https://pypi.org/project/pyueye/
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3 (check https://www.gnu.org/licenses/ )
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
+
 """
 # %% Imports - global dependecies (from standard library and installed by conda / pip)
 from multiprocessing import Process, Queue
@@ -18,14 +20,9 @@ import numpy as np
 class CameraWrapper(Process):
     """Class for wrapping controls of the IDS camera and provided API features."""
 
-    initialized = False  # Start the mail infinite loop if the class initialized
-    main_loop_time_delay = 25  # Internal constant - delaying for the main loop for receiving and process the commands
+    initialized: bool = False  # Start the mail infinite loop if the class initialized
+    main_loop_time_delay: int = 25  # Internal constant - delaying for the main loop for receiving and process the commands
     live_stream_flag: bool  # force type checking
-    exposure_time_ms: int
-    camera_type: str
-    max_width: int; max_height: int
-    image_width: int; image_height: int
-    camera_reference = None
 
     def __init__(self, messages_queue: Queue, exceptions_queue: Queue, images_queue: Queue, messages2caller: Queue,
                  exposure_t_ms: int, image_width: int, image_height: int, camera_type: str = "Simulated"):
@@ -133,7 +130,7 @@ class CameraWrapper(Process):
         # Below - the loop that receives the commands from GUI and initialize function to handle them
         while self.initialized:
             # Checking for commands created by licking buttons or by any events
-            if not(self.messages_queue.empty()) and (self.messages_queue.qsize() > 0) and self.initialized:
+            if not self.messages_queue.empty() and self.messages_queue.qsize() > 0 and self.initialized:
                 try:
                     message = self.messages_queue.get_nowait()  # get the message from the main controlling GUI
                     if isinstance(message, str):
@@ -280,11 +277,11 @@ class CameraWrapper(Process):
                 self.images_queue.put_nowait("Live Image substituted by this string")
             elif self.camera_type == "Simulated":
                 image = self.generate_noise_picture()  # simulate some noise image
-                if not(self.images_queue.full()):
+                if not self.images_queue.full():
                     self.images_queue.put_nowait(image)
                 time.sleep(self.exposure_time_ms/1000)  # Delay due to the simulated exposure
             # Below - checking for the command "Stop Live stream"
-            if not(self.messages_queue.empty()) and (self.messages_queue.qsize() > 0):
+            if not self.messages_queue.empty() and self.messages_queue.qsize() > 0:
                 try:
                     message = self.messages_queue.get_nowait()  # get the message from the main controlling GUI
                     if isinstance(message, str):
@@ -468,15 +465,15 @@ if __name__ == "__main__":
     camera = CameraWrapper(messages_queue, exceptions_queue, images_queue, messages2caller,
                            exposure_time_ms, img_width, img_height, camera_type="IDS")  # "Simulated", "IDS"
     camera.start(); time.sleep(7)
-    if not(messages2caller.empty()):
-        while not(messages2caller.empty()):
+    if not messages2caller.empty():
+        while not messages2caller.empty():
             try:
                 print(messages2caller.get_nowait())
             except Empty:
                 pass
     messages_queue.put_nowait("Stop"); time.sleep(4)
-    if not(messages2caller.empty()):
-        while not(messages2caller.empty()):
+    if not messages2caller.empty():
+        while not messages2caller.empty():
             try:
                 print(messages2caller.get_nowait())
             except Empty:

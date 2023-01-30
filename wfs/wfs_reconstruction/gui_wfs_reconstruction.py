@@ -5,12 +5,13 @@ GUI for perform wavefront reconstruction.
 This script is used for testing of the wavefront reconstruction algorithm (see reference) on the images from
 Shack-Hartmann sensor.
 
-@author: Sergei Klykov (GitHub: @ssklykov).
-@license: GPLv3 (check https://www.gnu.org/licenses/ ).
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
 
 Reference
 ---------
-    Antonello, J. (2014): https://doi.org/10.4233/uuid:f98b3b8f-bdb8-41bb-8766-d0a15dae0e27
+    Antonello, J. Doctoral thesis (2014): https://doi.org/10.4233/uuid:f98b3b8f-bdb8-41bb-8766-d0a15dae0e27
 
 """
 
@@ -34,11 +35,9 @@ from multiprocessing import Queue as mpQueue
 from threading import Thread
 
 # %% Imports - local dependencies (modules / packages in the containing it folder / sub-folders)
-print("Calling signature:", __name__)  # inspection of called signature
+# print("Calling signature:", __name__)  # inspection of called signature
 if __name__ == "__main__" or __name__ == Path(__file__).stem or __name__ == "__mp_main__":
-    # ???: Last condition arisen because of attempt to reload modules then additional Process launched, seems
-    # Actual call as the standalone module or from other module from this package (as a dependency)
-    # Note that in this case this module is aware only about modules / packages in the same folder
+    # Last condition arisen because of attempt to reload modules then additional Process launched
     from reconstruction_wfs_functions import (get_integral_limits_nonaberrated_centers, IntegralMatrixThreaded,
                                               get_localCoM_matrix, get_coms_shifts, get_zernike_coefficients_list,
                                               get_zernike_order_from_coefficients_number, get_coms_fast,
@@ -55,7 +54,7 @@ else:  # relative imports for resolving these dependencies in the case of import
     from .calc_zernikes_sh_wfs import get_polynomials_coefficients
     from .zernike_pol_calc import get_plot_zps_polar, zernike_polynomials_sum_tuned
     from . import camera as cam   # for accessing controlling wrapper for the cameras (simulated and IDS)
-    print("Implicit usage of camera module, list of importable modules: ", cam.__all__)
+    # print("Implicit usage of camera module, list of importable modules: ", cam.__all__)
 
 
 # %% Reconstructor GUI
@@ -109,8 +108,8 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         # Grid layout for placing buttons, labels, etc.
         self.pad = 8  # specification of additional space between widgets in the grid layout
-        self.load_aber_pic_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)  # Load Button
-        self.calibrate_button.grid(row=0, rowspan=1, column=5, columnspan=1, padx=self.pad, pady=self.pad)  # Calibrate Button
+        self.load_aber_pic_button.grid(row=0, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)
+        self.calibrate_button.grid(row=0, rowspan=1, column=5, columnspan=1, padx=self.pad, pady=self.pad)
         self.default_path_display.grid(row=0, rowspan=2, column=2, columnspan=3, padx=self.pad, pady=self.pad)
         # Load calibration file with focal spots:
         self.load_spots_button.grid(row=2, rowspan=1, column=0, columnspan=1, padx=self.pad, pady=self.pad)
@@ -1096,7 +1095,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.camera_handle.start()  # start associated with the camera Process()
             # Wait the confirmation that camera initialized and Process launched
             camera_initialized_flag = False; time.sleep(self.gui_refresh_rate_ms/1000)
-            while(not camera_initialized_flag):
+            while not camera_initialized_flag:
                 if not self.camera_messages.empty():
                     try:
                         message = self.camera_messages.get_nowait(); print(message)
@@ -1126,7 +1125,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
 
         """
         if self.camera_handle is not None:
-            if not(self.messages2Camera.full()):
+            if not self.messages2Camera.full():
                 self.messages2Camera.put_nowait("Snap single image")  # the command for acquiring single image
                 # timeout to wait the image on the imagesQueue
                 if self.exposure_t_ms > 5:
@@ -1140,7 +1139,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
                     image = None
                     print("The snap image not acquired, timeout reached")
                 # Represent image on the figure (associated widget)
-                if not(isinstance(image, str)) and (image is not None) and isinstance(image, np.ndarray):
+                if not isinstance(image, str) and image is not None and isinstance(image, np.ndarray):
                     # Remove 3rd dimension from camera image for correct working of the cursor data update
                     if len(image.shape) > 2:
                         image = np.squeeze(image, axis=2)
@@ -1184,13 +1183,13 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             if self.__flag_live_localization:
                 self.live_localize_spots()
                 time.sleep(5*self.gui_refresh_rate_ms/1000)  # additional delay for stopping reconstructions
-            if not(self.messages2Camera.full()):
+            if not self.messages2Camera.full():
                 self.messages2Camera.put_nowait("Stop Live Stream")  # Send the message to stop live stream
                 time.sleep(2*self.gui_refresh_rate_ms/1000)  # additional delay
             self.live_stream_button.config(text="Start Live", fg='green')
             self.single_snap_button.config(state="normal"); self.camera_selector.config(state="normal")
             self.exposure_t_ms_selector.config(state="normal")
-            self.frame_figure_axes.format_coord = self.format_coord  # !!! Fix bug (next string)
+            self.frame_figure_axes.format_coord = self.format_coord
             self.frame_figure_axes.mouseover = True  # enable tracing mouse
             # Restore toolbar on the same place as before
             self.plot_toolbar.grid(row=6, rowspan=1, column=2, columnspan=3,
@@ -1213,7 +1212,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             # t1 = time.perf_counter()
             try:
                 image = self.images_queue.get_nowait()  # get new image from a queue
-                if not(isinstance(image, str)) and (image is not None) and isinstance(image, np.ndarray):
+                if not isinstance(image, str) and image is not None and isinstance(image, np.ndarray):
                     # Remove 3rd dimension from camera image for correct working of the cursor data update
                     if len(image.shape) > 2:
                         image = np.squeeze(image, axis=2)
@@ -1259,7 +1258,7 @@ class ReconstructionUI(tk.Frame):  # The way of making the ui as the child of Fr
             self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw()
         else:
-            # !!! Calling backend canvas for re-drawing of updated image in the idle state (draw_idle())
+            # Calling backend canvas for re-drawing of updated image in the idle state (draw_idle())
             # that is more effective than call self.canvas.draw()
             self.imshowing.set_data(image)  # set data for AxesImage for updating image content
             self.canvas.draw_idle()
@@ -1882,17 +1881,16 @@ def launch():
     rootTk = tk.Tk(); gui = ReconstructionUI(rootTk); gui.mainloop()
 
 
-# %% Main launch
+# %% Run script as the main module
 if __name__ == "__main__":
     correct_blur_on_windows(); print_short_license_note()  # initial functions
     rootTk = tk.Tk()  # toplevel widget of Tk there the class - child of tk.Frame is embedded
     reconstructor_gui = ReconstructionUI(rootTk); reconstructor_gui.mainloop()
-    # !!! Drawbacks of this script so far:
-    # 1) Matplolib and tkinter complain both about lacking of thread safety, then 2nd Thread
+
+    # Errors and imperfections of this script so far:
+    # 1) Matplolib and tkinter complain both about lacking of thread safety, when 2nd Thread
     # start plotting the polynomials sum and calculated coefficients
-    # 2) Matplolib parameters are tricky to control and assign because of OOP usage of
-    # Axes, Figure and other classes for plotting
-    # 3) Check that program returns after call in command line! Sometimes, the close
+    # 2) Check that program returns after call in command line! Sometimes, the close
     # event not handled properly (instead Stop buttons handle it better than Close window one)
     # Save values for Variables Explorer for debugging only
     if reconstructor_gui.coms_shifts is not None and reconstructor_gui.coms_aberrated is not None:

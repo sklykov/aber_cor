@@ -5,6 +5,7 @@ Test IDS camera initialization.
 Reference
 ---------
     https://en.ids-imaging.com/programming-examples-details/simple-live-image-acquisition-with-the-python-interface-pyueye.html
+
 """
 import time
 import matplotlib.pyplot as plt
@@ -83,7 +84,7 @@ try:
 
         # Acquisition
         i = 0
-        while(i < 10):
+        while i < 10:
             # Extract and reshape the image
             array = ueye.get_data(pcImageMemory, width, height, nBitsPerPixel, pitch, copy=True)
             frame = np.reshape(array, (height.value, width.value, bytes_per_pixel))

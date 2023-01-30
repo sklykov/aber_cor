@@ -3,10 +3,14 @@
 Specification of calculation functions for reconstruction using non- and aberrated wavefronts recorded by a Shack-Hartmann sensor.
 
 These functions are called in 'wfs_reconstruction_ui.py' for using it in the GUI controlling program.
-According to the doctoral thesis by Antonello, J. (2014): https://doi.org/10.4233/uuid:f98b3b8f-bdb8-41bb-8766-d0a15dae0e27
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
+
+Reference
+---------
+    Antonello, J. Doctoral thesis (2014): https://doi.org/10.4233/uuid:f98b3b8f-bdb8-41bb-8766-d0a15dae0e27
 """
 
 # %% Imports - global dependencies (from standard library and installed by conda / pip)
@@ -186,7 +190,7 @@ def get_integral_limits_nonaberrated_centers(axes_fig, picture_as_array: np.ndar
         j = 0
         for i in range(np.size(coms_nonaberrated, 0)):
             # Plot found regions for CoM calculations
-            if not(i == i_center_subaperture):
+            if not i == i_center_subaperture:
                 axes_fig.add_patch(Circle((coms_nonaberrated[i, 1], coms_nonaberrated[i, 0]), aperture_radius,
                                           edgecolor='green', facecolor='none'))
             if i == i_center_subaperture:  # Deleting the central subaperture from the calculations

@@ -2,12 +2,13 @@
 docs/
 documentation/
 Docs/
+Documents/
 SimUscope/*.tiff  # testing acquisitions / file saving
 *.doc
 *.docx
 *.pdf
 
-# Driver libraries for the device (below) - not public yet
+# Excluded folders for the device control (not public, possibly yet)
 /dpp/*
 dpp/*
 

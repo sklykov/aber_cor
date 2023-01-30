@@ -5,8 +5,8 @@ Specification of calculation functions for reconstruction using non- and aberrat
 These functions are called further in the 'reconstruction_test.py' file for testing reconstructions.
 According to the doctoral thesis by Antonello, J. (2014): https://doi.org/10.4233/uuid:f98b3b8f-bdb8-41bb-8766-d0a15dae0e27
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
 """
 
 # %% Imports - global dependencies (from standard library and installed by conda / pip)
@@ -121,8 +121,6 @@ def get_localCoM_matrix(image: np.ndarray, min_dist_peaks: int = 15, threshold_a
         plt.plot(coms[:, 1], coms[:, 0], '.', color="green")
         plt.title("Found center of masses")
     return coms
-
-# !!! def get_integr_limits_centralized_subapertures(...) - deleted as not used anymore
 
 
 def rho_ab(rho0: float, theta: float, theta0: float, aperture_radius: float) -> tuple:
@@ -275,12 +273,6 @@ def r_integral_tabular_funcY(r: float, theta: float, m: int, n: int) -> tuple:
     Angularmn = triangular_function(m, theta)
     derivAngularmn = triangular_derivative_dtheta(m, theta)
     return (derivRmn*r*Angularmn*np.sin(theta)), (Rmn*derivAngularmn*np.cos(theta))
-
-
-# !!! def calc_integrals_on_apertures - was similar to the function below, but it calculates the integrals on the
-# radial polar coordinates without calibration it to the distance from the center to the most distant sub-aperture,
-# that makes below integration on the unit circular aperture on the radial coordinate rho, that seems helps to
-# reproduce associated tests of wavefront reconstruction
 
 
 def calc_integrals_on_apertures_unit_circle(integration_limits: np.ndarray, theta0: np.ndarray, rho0: np.ndarray, m: int, n: int,
@@ -502,9 +494,6 @@ def get_polynomials_coefficients(integral_matrix: np.ndarray, coms_shifts: np.nd
     return alpha_coefficients
 
 
-# !!! def get_overall_coms_shifts() - deleted, it was for calculation of CoMs shifts for each pair for further calibration
-
-
 def get_integral_limits_nonaberrated_centers(pics_folder: str = "pics", background_pic_name: str = "picBackground.png",
                                              nonaberrated_pic_name: str = "nonAberrationPic.png", min_dist_peaks: int = 18,
                                              threshold_abs: float = 60.0, region_size: int = 20, subtract_background: bool = False,
@@ -555,19 +544,19 @@ def get_integral_limits_nonaberrated_centers(pics_folder: str = "pics", backgrou
         backgroundPath = os.path.join(absolute_path, background_pic_name)
         nonaberratedPath = os.path.join(absolute_path, nonaberrated_pic_name)
     else:
-        if not(os.path.exists(pics_folder)):
+        if not os.path.exists(pics_folder):
             raise Exception("Specified Path doesn't exist")
         else:
-            if not(os.path.isdir(pics_folder)):
+            if not os.path.isdir(pics_folder):
                 raise Exception("Specified object isn't a directory")
             else:
                 # Looking for images on the specified path
                 if subtract_background:
                     backgroundPath = os.path.join(pics_folder, background_pic_name)
-                    if not(os.path.isfile(backgroundPath)):
+                    if not os.path.isfile(backgroundPath):
                         raise Exception("The background image doesn't exist or not a file, check root path and its name")
                 nonaberratedPath = os.path.join(pics_folder, nonaberrated_pic_name)
-                if not(os.path.isfile(nonaberratedPath)):
+                if not os.path.isfile(nonaberratedPath):
                     raise Exception("Some of specified images are not actual files, check path and their names")
     # Open the stored files and extracting the recorded background from the wavefronts
     nonaberrated = (io.imread(nonaberratedPath, as_gray=True))
@@ -622,7 +611,7 @@ def get_integral_limits_nonaberrated_centers(pics_folder: str = "pics", backgrou
     j = 0
     for i in range(np.size(coms_nonaberrated, 0)):
         # Plot found regions for CoM calculations
-        if plot_results and not(i == i_center_subaperture):
+        if plot_results and not i == i_center_subaperture:
             plt.gca().add_patch(Circle((coms_nonaberrated[i, 1], coms_nonaberrated[i, 0]), aperture_radius,
                                        edgecolor='green', facecolor='none'))
         if i == i_center_subaperture:  # Deleting the central subaperture from the calculations
@@ -702,19 +691,19 @@ def get_coms_shifts(coms_nonaberrated: np.ndarray, integral_matrix: np.ndarray, 
         backgroundPath = os.path.join(absolute_path, background_pic_name)
         aberratedPath = os.path.join(absolute_path, aberrated_pic_name)
     else:
-        if not(os.path.exists(pics_folder)):
+        if not os.path.exists(pics_folder):
             raise Exception("Specified Path doesn't exist")
         else:
-            if not(os.path.isdir(pics_folder)):
+            if not os.path.isdir(pics_folder):
                 raise Exception("Specified object isn't a directory")
             else:
                 # Looking for images on the specified path
                 if subtract_background:
                     backgroundPath = os.path.join(pics_folder, background_pic_name)
-                    if not(os.path.isfile(backgroundPath)):
+                    if not os.path.isfile(backgroundPath):
                         raise Exception("The background image doesn't exist or not a file, check root path and its name")
                 aberratedPath = os.path.join(pics_folder, aberrated_pic_name)
-                if not(os.path.isfile(aberratedPath)):
+                if not os.path.isfile(aberratedPath):
                     raise Exception("The aberrated image doesn't exist or not a file, check root path and its name")
     # Open the stored files and extracting the recorded background from the wavefronts
     aberrated = (io.imread(aberratedPath, as_gray=True))

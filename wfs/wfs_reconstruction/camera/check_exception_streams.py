@@ -2,8 +2,10 @@
 """
 Module for import into the camera GUI for performing periodically checks that there are no exceptions happened and for printing messages.
 
-@author: Sergei Klykov (GitHub: @ssklykov)
-@license: GPLv3
+@author: sklykov
+
+@license: GPLv3, general terms on: https://www.gnu.org/licenses/gpl-3.0.en.html
+
 """
 # %% Imports
 from threading import Thread
@@ -38,7 +40,7 @@ class ExceptionsChecker(Thread):
         """
         running = True; quit_flag = False
         while running:
-            if not(self.messages_queue.empty()) and (self.messages_queue.qsize() > 0):
+            if not self.messages_queue.empty() and self.messages_queue.qsize() > 0:
                 try:
                     message = self.messages_queue.get_nowait()  # Getting immediately the message
                     if isinstance(message, Exception):  # caught the exception
@@ -86,7 +88,7 @@ class MessagesPrinter(Thread):
         """
         running = True
         while running:
-            if not(self.messages_queue.empty()) and (self.messages_queue.qsize() > 0):
+            if not self.messages_queue.empty() and self.messages_queue.qsize() > 0:
                 try:
                     message = self.messages_queue.get_nowait()  # Getting immediately the message
                     if isinstance(message, str):  # normal ending the running task
@@ -102,5 +104,4 @@ class MessagesPrinter(Thread):
 
                 except Empty:
                     pass
-
             time.sleep(self.period_checks_ms/1000)  # Artificial delays between each loop iteration
